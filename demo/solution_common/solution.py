@@ -27,6 +27,7 @@ class Solution:
             request_list: A list which contains the Request received in this time-segment. Only Layer-1 Switch will receive.
                 The Format of Request is given in solution_common.message.Request
         """
+        # Test 01
         pass
 
     def ask_round_solution(self, neighbor_info_list: List[SwitchStatsInfo]) -> List[Message]:
