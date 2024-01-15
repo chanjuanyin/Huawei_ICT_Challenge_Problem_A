@@ -16,11 +16,12 @@ class Message:
         self.from_node_id: int = from_id
         self.to_node_id: int = to_id
         self.target_node_id: int = target_node_id
-        self.request_id: int = request_id
-        self.message_id: int = message_id
+        self.request_id: int = request_id # MajorId
+        self.message_id: int = message_id # MinorId # Need to communicate in SwitchStatsInfo
         self.request_begin_time: int = request_begin_time
 
 
 class SwitchStatsInfo:
     def __init__(self):
-        self.info: List[int] = []
+        self.info: List[int] = [] # At most 256 number of integers, so this list has maximum length 256
+        # Note that the total number of nodes is 208 maximum, so from the controller point of view, it can use 207 integers to communicate with 207 other servers, this will take up 207 out of 256 integers
