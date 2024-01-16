@@ -39,6 +39,7 @@ class Solution:
             return Messages given by your algorithm
         """
         return []
+    # Test 02
 
     def next_round(self, result: List[Tuple[Message, bool]]) -> SwitchStatsInfo:
         """
