@@ -50,3 +50,5 @@ class Solution:
             be careful that info length is under 256 and single data-range in [-2147483648,2147483647]
         """
         return SwitchStatsInfo()
+    
+    # Test 03
