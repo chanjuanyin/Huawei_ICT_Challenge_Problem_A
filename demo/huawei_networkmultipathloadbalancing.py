@@ -26,8 +26,106 @@ class NodePlaceholder:
               f"Incoming Bandwidth: {self.incoming_bandwidth}, Outgoing Bandwidth: {self.outgoing_bandwidth}"
               f"Remaining_Buffer: {self.remaining_buffer}, Remaining_Inbound: {self.remaining_inbound}, Remaining_Outbound: {self.remaining_outbound}")
 
-#Below three classes if for rewriting and defining all the classes in message.py
+# Finding Neighbour & Paths
+class FindReachable:
+    def __init__(self, node_id, level, graph, node_info): # neighbors=None):
+        self.node_id = node_id
+        self.level = level
+        self.graph = List[List[int]]
+        self.node_info = List[Tuple[int, int, int, int, int]]
 
+        # Check the level of the node and create attributes accordingly
+        if self.level == 1:
+            self.level_0_reachable = []
+            self.level_2_reachable = []
+            self.level_3_reachable = []
+            
+            self.if_I_am_level_1()
+
+        elif self.level == 2:
+            self.level_1_reachable = []
+            self.level_3_reachable = []
+            self.level_0_reachable = []
+            
+            self.if_I_am_level_2()
+
+        elif self.level == 3:
+            self.level_2_reachable = []
+            self.level_1_reachable = []
+            self.level_0_reachable = []
+            
+            self.if_I_am_level_3()
+            
+            
+    def if_I_am_level_1(self):
+        # Iterate through immediate neighbors
+        for i in range(len(self.graph[0])):
+            c = self.graph[self.node_id][i]
+            if c == 1 and i != self.node_id:
+                k = self.node_info[i][1]
+                if k == 0:
+                    self.level_0_reachable.append(i)
+                else:
+                    self.level_2_reachable.append(i)
+              
+        # Iterate through connected nodes at level 2
+        for j in self.level_2_reachable:
+            for i in range(len(self.graph[0])):
+                c = self.graph[j][i]
+                if c == 1 and i != j:
+                    k = self.node_info[i][1]
+                    if k == 3:
+                        self.level_3_reachable.append(i)
+        
+    def if_I_am_level_2(self):
+        # Iterate through immediate neighbors
+        for i in range(len(self.graph[0])):
+            c = self.graph[self.node_id][i]
+            if c == 1 and i != self.node_id:
+                k = self.node_info[i][1]
+                if k == 1:
+                    self.level_1_reachable.append(i)
+                else:
+                    self.level_3_reachable.append(i)
+        
+        # Iterate through connected nodes at level 1
+        for j in self.level_1_reachable:
+            for i in range(len(self.graph[0])):
+                c = self.graph[j][i]
+                if c == 1 and i != j:
+                    k = self.node_info[i][1]
+                    if k == 0:
+                        self.level_0_reachable.append(i)
+    
+    def if_I_am_level_3(self):
+        # Iterate through immediate neighbors
+        for i in range(len(self.graph[0])):
+            c = self.graph[self.node_id][i]
+            if c == 1 and i != self.node_id:
+                k = self.node_info[i][1]
+                if k == 2:
+                    self.level_2_reachable.append(i)
+        
+        # Iterate through connected nodes at level 2
+        for j in self.level_2_reachable:
+            for i in range(len(self.graph[0])):
+                c = self.graph[j][i]
+                if c == 1 and i != j:
+                    k = self.node_info[i][1]
+                    if k == 1:
+                        self.level_1_reachable.append(i)
+                        
+        # Iterate through connected nodes at level 1
+        for j in self.level_1_reachable:
+            for i in range(len(self.graph[0])):
+                c = self.graph[j][i]
+                if c == 1 and i != j:
+                    k = self.node_info[i][1]
+                    if k == 0:
+                        self.level_0_reachable.append(i)
+    
+
+#Below three classes if for rewriting and defining all the classes in message.py
 
 class UserRequest:
     def __init__(self, request_id: int, target_node_id: int, request_begin_time: int):
@@ -42,18 +140,6 @@ class UserRequest:
     def delete_message(self,int_list: List[int]):
         deleted_list=list(set(self.message_id)-set(int_list))
         self.message_id=deleted_list
-
-class UserRequest(Request):
-    def __init__(self, source_node_id=0, target_node_id=0, data_size=0, begin_time=0, request_id=0):
-        super().__init__(source_node_id, target_node_id, data_size, begin_time, request_id)
-
-
-"""I think every message should use a Major Id - Minor Id to index it"""
-class UserMessage(Message):
-    def __init__(self, from_id: int, to_id: int, target_node_id: int, request_id: int, message_id: int,
-                 request_begin_time: int):
-        super().__init__(from_id, to_id, target_node_id, request_id, message_id, request_begin_time)
-
 
 
 """define SwtichsStatsInfo here or just create another class in this file
@@ -98,20 +184,32 @@ class UserSolution(Solution):
                  nodes_info: List[Tuple[int, int, int, int, int]]):
         super().__init__(node_id, bw_in, bw_out, size, level, graph, nodes_info)
         nodes_info = sorted(nodes_info, key=lambda x: x[0])
+        
         if nodes_info[0][0]==-1:
             nodes_info = nodes_info[1:]
+        
+        # Newspaper broadcasted by controller and each individual node will update their copy of the newspaper after hearing from controller's news reporting
         self.node_info_update_newspaper = []
         for i in range(len(graph[0])):
             new_node = NodePlaceholder(nodes_info[i][0], nodes_info[i][1], nodes_info[i][4], nodes_info[i][2], nodes_info[i][3], 
                  nodes_info[i][4], nodes_info[i][2], nodes_info[i][3])
             self.node_info_update_newspaper.append(new_node)
+        
+        # Your record of the request-messages: a giant library
         self.requests_messages_you_possess = {} # {request_id: UserRequest object}
-        # Shing's work
-        self.remaining_outbound_of_myself = self.bw_out
-        self.remaining_buffer_of_myself = self.size
         
+        # Information that you know tonight before you sleep / tomorrow morning soon after you wake up
+        self.remaining_outbound_of_myself = self.bw_out # Night
+        self.remaining_buffer_of_myself = self.size # Morning
         
-    #the access node will receive request and divide into messages   
+        # Find reachable (shing's work)
+        self.find_reachable = []
+        for i in range(len(graph[0])):
+            find_reachable_object = FindReachable(nodes_info[i][0], nodes_info, graph, nodes_info)
+            self.find_reachable.append(find_reachable_object)
+        
+    # Shing's work
+    # the access node will receive request and divide into messages   
     def add_request_list(self, request_list: List[Request]) -> None:
         # Iterate through every request in List[Request]
         # # For each request, first check if self.remaining_buffer_of_myself >= new request's size 
@@ -121,6 +219,7 @@ class UserSolution(Solution):
         #   user_request_object = UserRequest(a bunch of parameters you input for yourself)
         #   then, you will do:
         #   self.requests_messages_you_possess[your new request id that you should know] = user_request_object
+        #   (FYI, self.requests_messages_you_possess is a dictionary, look at line 199)
         #   last step, you will need to update your buffer by doing:
         #   self.remaining_buffer_of_myself -= new request's size 
         #   Everything in this indentation is within the >= logic of the if-else statement
