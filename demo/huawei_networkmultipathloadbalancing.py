@@ -141,18 +141,6 @@ class UserRequest:
         deleted_list=list(set(self.message_id)-set(int_list))
         self.message_id=deleted_list
 
-class UserRequest(Request):
-    def __init__(self, source_node_id=0, target_node_id=0, data_size=0, begin_time=0, request_id=0):
-        super().__init__(source_node_id, target_node_id, data_size, begin_time, request_id)
-
-
-"""I think every message should use a Major Id - Minor Id to index it"""
-class UserMessage(Message):
-    def __init__(self, from_id: int, to_id: int, target_node_id: int, request_id: int, message_id: int,
-                 request_begin_time: int):
-        super().__init__(from_id, to_id, target_node_id, request_id, message_id, request_begin_time)
-
-
 
 """define SwtichsStatsInfo here or just create another class in this file
 what to do   1.  a controler view of SwitchStatsInfo, including
@@ -231,6 +219,7 @@ class UserSolution(Solution):
         #   user_request_object = UserRequest(a bunch of parameters you input for yourself)
         #   then, you will do:
         #   self.requests_messages_you_possess[your new request id that you should know] = user_request_object
+        #   (FYI, self.requests_messages_you_possess is a dictionary, look at line 199)
         #   last step, you will need to update your buffer by doing:
         #   self.remaining_buffer_of_myself -= new request's size 
         #   Everything in this indentation is within the >= logic of the if-else statement
