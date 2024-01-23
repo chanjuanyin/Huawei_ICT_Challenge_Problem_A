@@ -158,7 +158,7 @@ what to do   1.  a controler view of SwitchStatsInfo, including
                     First one out of 256 integers:
                     2.1.1 identify myself                                         bitsize=8
                     2.1.2 remaining outbound  t=j                                 bitsize=8
-                    2.1.3 new request added into you    t=j                       bitsize=11
+                    2.1.3 new request added into you    t=j                       bitsize=11 line 207
                     
                     Rest of 255 integers
                     For successful messages at t=j:
@@ -176,7 +176,11 @@ what to do   1.  a controler view of SwitchStatsInfo, including
                     Just ignore:
                     2.4.1 255 to denote please don't read                                       bitsize=8
 
-                        
+                3.  SwitchStatsInfo if I am level 0
+                    First one out of 256 integers:
+                    3.1.1 identify myself as 254                                                bitsize=8
+                    
+                    
                     2.x maybe node_info for the first time slice
 """
 
@@ -374,21 +378,11 @@ class UserSolution(Solution):
         
     # 1. take result: List[Tuple[Message, bool]] and extract out the Message
     # 2. create success dict and fail dict 
-    # 2. decode the message and update the SwitchStatsInfo
+    # 2. decode the message and update the SwitchStatsInfo for different levels
     # 3. return SwitchStatsInfo
-    def next_round(self, result: List[Tuple[Message, bool]]) -> SwitchStatsInfo:
-        #count for success and fail messages
-        success, fail = 0,0
-        for message_result in result:
-            if message_result[1]==True:
-                success+=1
-            else:
-                fail+=1
-                
+    def next_round(self, result: List[Tuple[Message, bool]]) -> SwitchStatsInfo:             
         def bin_tran(num):
-        # Assuming a 16-bit binary representation
             return format(num, '032b')
-        
         def get_minor_id_range_list(userRequest):
             minor_id_range_list = [] # It is a list of list, every list inside will be minor id to minor id for one request
             message_id_list = userRequest.message_id
@@ -402,171 +396,165 @@ class UserSolution(Solution):
                 slow = fast
             return minor_id_range_list
                 
-   
-        # assume that buffer_size will not be penalized (double check later)
-        """Define and append the success_dict and fail_dict"""
-        success_dict={} #success_dict = {to_node_id : {request_id : UserRequest Object} , , , ,}
-        fail_dict={} #fail_dict = {to_node_id : counts}
-        
-        #append success dict
-        for pair in result:
-            Message=pair[0]
-            bool=pair[1]
-            #Message classs remains to be defined
-            if bool:
-                if Message.to_node_id not in success_dict:
-                    success_dict[Message.to_node_id] = {}
-                    # So this dictionary is of the format {request_id: UserRequest()}
+        if self.level == 1 or self.level == 2 or self.level == 3:        
+            #count for success and fail messages
+            success, fail = 0,0
+            for message_result in result:
+                if message_result[1]==True:
+                    success+=1
                 else:
-                    request_id_dict = success_dict[Message.to_node_id]
-                    if Message.request_id not in request_id_dict:
-                        request_id_dict[Message.request_id] = UserRequest(Message.request_id, Message.target_node_id, Message.request_begin_time)
-                        request_id_dict[Message.request_id].message_id.append(Message.message_id)
+                    fail+=1
+                    
+            """Define and append the success_dict and fail_dict"""
+            success_dict={} #success_dict = {to_node_id : {request_id : UserRequest Object} , , , ,}
+            fail_dict={} #fail_dict = {to_node_id : counts}
+            #append success dict
+            for pair in result:
+                Message=pair[0]
+                bool=pair[1]
+                if bool:
+                    if Message.to_node_id not in success_dict:
+                        success_dict[Message.to_node_id] = {}
                     else:
-                        # The UserRequest object can be obtained by request_id_dict[Message.request_id]
-                        request_id_dict[Message.request_id].message_id.append(Message.message_id)
-                # Change your data bank
-                self.requests_messages_you_possess[Message.request_id].delete_message(Message.message_id)
-                
-                
-        #append fail dict
-            else:
-                if Message.to_node_id not in fail_dict:
-                    fail_dict[Message.to_node_id] = 1
-                else:
-                    fail_dict[Message.to_node_id] += 1
-        
-        """Define and update SwtichStatsInfo"""
-        switchStatsInfo = [0 for i in range(256)]
-        integer_index = 0
-        """2.1.1 to 2.1.3"""
-        bin_first_int = bin_tran(switchStatsInfo[integer_index])
-        self.remaining_outbound_of_myself -= fail
-        remaining_outbound_bin = bin_tran(self.remaining_outbound_of_myself)
-        bin_first_int[8:16] = remaining_outbound_bin[24:]
-        switchStatsInfo[integer_index] = int(bin_first_int , 2)
-        integer_index += 1
-        
-        """2.2.1 to 2.2.5"""     
-        #two for loop, the outer loop is different to_node_id
-        #              the inner loop is different request_id   
-        for to_node_id, request_id_dict in success_dict:
-            #we don't need to add 1 to integer_index as we already took care of it in the inner loop
-            for request_id, userRequest in request_id_dict:
-                # THink about how to add into your switchStatsInfo
-                # 2.2.1 to 2.2.3
+                        request_id_dict = success_dict[Message.to_node_id]
+                        if Message.request_id not in request_id_dict:
+                            request_id_dict[Message.request_id] = UserRequest(Message.request_id, Message.target_node_id, Message.request_begin_time)
+                            request_id_dict[Message.request_id].message_id.append(Message.message_id)
+                        else:
+                            request_id_dict[Message.request_id].message_id.append(Message.message_id)
+                    self.requests_messages_you_possess[Message.request_id].delete_message([Message.message_id])
+                    self.remaining_buffer_of_myself += 1
+                else:#append fail dict
+                    if Message.to_node_id not in fail_dict:
+                        fail_dict[Message.to_node_id] = 1
+                    else:
+                        fail_dict[Message.to_node_id] += 1
+            
+            """Define and update normal node SwtichStatsInfo"""
+            switchStatsInfo = [0 for i in range(256)]
+            integer_index = 0
+            """2.1.1 to 2.1.3 the first integer"""
+            bin_first_int = bin_tran(switchStatsInfo[integer_index])
+            self.remaining_outbound_of_myself -= fail
+            bin_first_int[0:8] = bin_tran(self.node_id)[24:]
+            bin_first_int[8:16] = bin_tran(self.remaining_outbound_of_myself)[24:]
+            if self.level == 1: #take care of the access level
+                bin_first_int[16:] = bin_tran(self.new_messages_success_added_count)[21:] + "00000"
+            else: #level =2 , 3
+                bin_first_int[16:] = "0" * 16
+            switchStatsInfo[integer_index] = int(bin_first_int , 2)
+            integer_index += 1
+            """2.2.1 to 2.2.5"""     
+            #two for loop, the outer loop is different to_node_id
+            #              the inner loop is different request_id   
+            for to_node_id, request_id_dict in success_dict:
+                for request_id, userRequest in request_id_dict:
+                    # 2.2.1 to 2.2.3
+                    integer_value = switchStatsInfo[integer_index]
+                    integer_value_bin = bin_tran(integer_value)
+                    integer_value_bin[0:8] = bin_tran(to_node_id)[24:]
+                    integer_value_bin[8:16] = bin_tran(userRequest.target_node_id)[24:]
+                    integer_value_bin[16:29] = bin_tran(request_id)[19:]
+                    integer_value_bin[29:] = "0" * 3
+                    switchStatsInfo[integer_index] = int(integer_value_bin , 2)
+                    integer_index += 1
+                    # 2.2.4 - 2.2.5
+                    # the first 2.2.4 + 2.2.5 * 1
+                    # the first 2.2.4
+                    integer_value = switchStatsInfo[integer_index]
+                    integer_value_bin = bin_tran(integer_value)
+                    integer_value_bin[0:8] = bin_tran(userRequest.request_begin_time)[24:]
+                    integer_value_bin[8:15] = "0000000"
+                    # the first 2.2.5 * 1
+                    minor_id_range_list = get_minor_id_range_list(userRequest) # It is a list of list, every list inside will be minor id to minor id for one request
+                    first_range = minor_id_range_list[0]
+                    first_range_start = first_range[0]
+                    first_range_end = first_range[1]
+                    first_range_start_bit = bin_tran(first_range_start)
+                    first_range_end_bit = bin_tran(first_range_end)
+                    integer_value_bin[15:29] = first_range_start_bit[25:] + first_range_end_bit[25:]
+                    if len(minor_id_range_list) > 1:
+                        integer_value_bin[29:] = "100"
+                    else:
+                        integer_value_bin[29:] = "000"
+                    minor_id_range_list.pop(0)
+                    switchStatsInfo[integer_index] = int(integer_value_bin , 2)
+                    integer_index += 1
+                    #the rest of 2.2.5 * 2 * n
+                    count_range = 0
+                    integer_value = switchStatsInfo[integer_index]
+                    integer_value_bin = bin_tran(integer_value)
+                    for Range in minor_id_range_list: #Range is a list that have 2 element as i mentioned above
+                        if count_range == 2:
+                            switchStatsInfo[integer_index] = int(integer_value_bin + "00" , 2)
+                            integer_index += 1
+                            integer_value = switchStatsInfo[integer_index]
+                            integer_value_bin = bin_tran(integer_value)
+                        start_range = Range[0]
+                        end_range = Range[1]
+                        start_range_bit = bin_tran(start_range)
+                        end_range_bit = bin_tran(end_range)
+                        #combine range is a 14 binary bit
+                        combine_range = start_range_bit[25:] + end_range_bit[25:]
+                        if minor_id_range_list[-1] == Range: # if there is no more Range
+                            integer_value_bin[0 + count_range*15 : 15 + count_range*15] = combine_range + "0"
+                            if count_range == 0:
+                                integer_value_bin[15:] = "0" * 17
+                                switchStatsInfo[integer_index] = int(integer_value_bin , 2)
+                                integer_index += 1
+                            else:
+                                switchStatsInfo[integer_index] = int(integer_value_bin + "00" , 2)
+                                integer_index += 1
+                        else:
+                            integer_value_bin[0 + count_range*15 : 15 + count_range*15] = combine_range + "1"
+                        count_range += 1
+                    
+            for to_node_id, number_of_failure in fail_dict: # add into your swtichStatsInfo to mention your failure
                 integer_value = switchStatsInfo[integer_index]
                 integer_value_bin = bin_tran(integer_value)
                 integer_value_bin[0:8] = bin_tran(to_node_id)[24:]
-                integer_value_bin[8:16] = bin_tran(userRequest.target_node_id)[24:]
-                integer_value_bin[16:29] = bin_tran(request_id)[19:]
+                integer_value_bin[8:16] = bin_tran(255)[24:]
+                integer_value_bin[16:24] = bin_tran(number_of_failure)[24:]
+                integer_value_bin[24:] = "0" * 8
                 switchStatsInfo[integer_index] = int(integer_value_bin , 2)
                 integer_index += 1
                 
-                # 2.2.4 - 2.2.5
-                # the first 2.2.4 + 2.2.5 * 1
-                # the first 2.2.4
+            for rest_integer_index in range(integer_index,256): # The rest of the integers to_node_id should make it to 255
+                integer_index = rest_integer_index
                 integer_value = switchStatsInfo[integer_index]
                 integer_value_bin = bin_tran(integer_value)
-                integer_value_bin[0:8] = bin_tran(userRequest.request_begin_time)[24:]
-                integer_value_bin[8:15] = "0000000"
-                
-                minor_id_range_list = get_minor_id_range_list(userRequest) 
-                # the first 2.2.5 * 1
-                first_range = minor_id_range_list[0]
-                first_range_start = first_range[0]
-                first_range_end = first_range[1]
-                first_range_start_bit = bin_tran(first_range_start)
-                first_range_end_bit = bin_tran(first_range_end)
-                integer_value_bin[15:29] = first_range_start_bit[25:] + first_range_end_bit[25:]
-                if len(minor_id_range_list) > 1:
-                    integer_value_bin[29:] = "100"
-                else:
-                    integer_value_bin[29:] = "000"
-                minor_id_range_list.pop(0)
+                integer_value_bin[:] = bin_tran(255)[24:] * 4
                 switchStatsInfo[integer_index] = int(integer_value_bin , 2)
-                integer_index += 1
-                
-                #the rest of 2.2.5 * 2 * n
-                # You also need to think of an algorithm to keep finding the from minorID to minorID
-                # It is a list of list, every list inside will be minor id to minor id for one request
-                
-                count_range = 0
-                integer_value = switchStatsInfo[integer_index]
-                integer_value_bin = bin_tran(integer_value)
-                for Range in minor_id_range_list: #Range is a list that have 2 element as i mentioned above
-                    if count_range == 2:
-                        switchStatsInfo[integer_index] = int(integer_value_bin + "00" , 2)
-                        integer_index += 1
-                        integer_value = switchStatsInfo[integer_index]
-                        integer_value_bin = bin_tran(integer_value)
-                
-                    start_range = Range[0]
-                    end_range = Range[1]
-                    start_range_bit = bin_tran(start_range)
-                    end_range_bit = bin_tran(end_range)
-                    #combine range is a 14 binary bit
-                    combine_range = start_range_bit[25:] + end_range_bit[25:]
-                    # if sth then + "1"
-                    if minor_id_range_list[-1] == Range:
-                        integer_value_bin[0 + count_range*15 : 15 + count_range*15] = combine_range + "0"
-                        if count_range == 0:
-                            integer_value_bin[15:] = "0" * 17
-                            switchStatsInfo[integer_index] = int(integer_value_bin , 2)
-                            integer_index += 1
-                        else:
-                            switchStatsInfo[integer_index] = int(integer_value_bin + "00" , 2)
-                            integer_index += 1
-                    else:
-                        integer_value_bin[0 + count_range*15 : 15 + count_range*15] = combine_range + "1"
-                    count_range += 1
-                    #switchStatsInfo[integer_index] = int(integer_value_bin , 2)
-                
-                
-                
-        
-        for to_node_id, number_of_failure in fail_dict:
-            # add into your swtichStatsInfo to mention your failure
+
+        elif self.level == 4:
+            """Define and update controller SwtichStatsInfo"""
+            switchStatsInfo = [0 for i in range(256)]
+            integer_index = 0
             integer_value = switchStatsInfo[integer_index]
             integer_value_bin = bin_tran(integer_value)
-            integer_value_bin[0:8] = bin_tran(to_node_id)[24:]
-            integer_value_bin[8:16] = bin_tran(255)[24:]
-            integer_value_bin[16:24] = bin_tran(number_of_failure)[24:]
-            integer_value_bin[24:] = "0" * 8
+            integer_value_bin[0:8] = bin_tran(255)[24:]
+            integer_value_bin[24:] = "0" * 24
+            switchStatsInfo[integer_index] = int(integer_value_bin , 2)
+            integer_index += 1
+            for node in self.node_info_update_newspaper:
+                integer_value = switchStatsInfo[integer_index]
+                integer_value_bin = bin_tran(integer_value)
+                integer_value_bin[0:11] = bin_tran(node.remaining_buffer)[21:]
+                integer_value_bin[11:21] = bin_tran(node.remaining_inbound)[22:]
+                integer_value_bin[21:29] = bin_tran(node.remaining_outbound)[24:]
+                integer_value_bin[29:] = "0" * 3
+                switchStatsInfo[integer_index] = int(integer_value_bin , 2)
+                integer_index += 1
+                
+        else: #level ==0
+            switchStatsInfo = [0 for i in range(256)]
+            integer_index = 0
+            integer_value = switchStatsInfo[integer_index]
+            integer_value_bin = bin_tran(integer_value)
+            integer_value_bin[0:8] = bin_tran(254)[24:]
+            integer_value_bin[8:] = "0" * 24
             switchStatsInfo[integer_index] = int(integer_value_bin , 2)
             integer_index += 1
             
-        # The rest of the integers will need to take care of, to_node_id should make it to 255
-        for rest_integer_index in range(integer_index,256):
-            integer_index = rest_integer_index
-            integer_value = switchStatsInfo[integer_index]
-            integer_value_bin = bin_tran(integer_value)
-            integer_value_bin[:] = bin_tran(255)[24:] * 4
-            switchStatsInfo[integer_index] = int(integer_value_bin , 2)
-
-        
-            
-        
-        
-        
-        
-       
-        
-        
-        
-        
-      #  for pair in result:
-      #     to_node_id_dict.append(pair[0].to_node_id)
-      #    to_node_id_dict=set(sorted(to_node_id_list))
-            
-        # for to_node_id in to_node_id_list:
-        #     #if not enough incoming_bandwidth: (can be verified by success==remaining_inbound & fail!=0)
-        #     if (fail != 0) & (success == self.node_info_update_newspaper[to_node_id].remaining_inbound):
-        #         #penalized sender bandout, self.node_d is sender id
-        #         self.node_info_update_newspaper[self.node_id].remaining_outbound -= fail
-                
-        #     elif (fail != 0) & (success < self.node_info_update_newspaper[to_node_id].remaining_inbound):
-        #         #penalize receiver bandin and sender bandout, to_node_id is receiver id, self.node_id is sender id
-        #         #self.node_info_update_newspaper[to_node_id].remaining_inbound -= fail
-        #         self.SwitchStatsInfo[0]
-        #         self.node_info_update_newspaper[self.node_id].remaining_outbound -= fail 
+        SwitchStatsInfo.info = switchStatsInfo
+        return SwitchStatsInfo
