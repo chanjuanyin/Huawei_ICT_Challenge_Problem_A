@@ -41,13 +41,6 @@ class FindReachable:
             self.level_3_reachable = []
             
             self.if_I_am_level_1()
-            
-            self.level_0_reachable = set(self.level_0_reachable)
-            self.level_0_reachable = sorted(self.level_0_reachable)
-            self.level_2_reachable = set(self.level_2_reachable)
-            self.level_2_reachable = sorted(self.level_2_reachable)
-            self.level_3_reachable = set(self.level_3_reachable)
-            self.level_3_reachable = sorted(self.level_3_reachable)
 
         elif self.level == 2:
             self.level_1_reachable = []
@@ -55,14 +48,6 @@ class FindReachable:
             self.level_0_reachable = []
             
             self.if_I_am_level_2()
-            
-            self.level_0_reachable = set(self.level_0_reachable)
-            self.level_0_reachable = sorted(self.level_0_reachable)
-            self.level_1_reachable = set(self.level_1_reachable)
-            self.level_1_reachable = sorted(self.level_1_reachable)
-            self.level_3_reachable = set(self.level_3_reachable)
-            self.level_3_reachable = sorted(self.level_3_reachable)
-
 
         elif self.level == 3:
             self.level_2_reachable = []
@@ -70,13 +55,6 @@ class FindReachable:
             self.level_0_reachable = []
             
             self.if_I_am_level_3()
-            
-            self.level_0_reachable = set(self.level_0_reachable)
-            self.level_0_reachable = sorted(self.level_0_reachable)
-            self.level_2_reachable = set(self.level_2_reachable)
-            self.level_2_reachable = sorted(self.level_2_reachable)
-            self.level_1_reachable = set(self.level_1_reachable)
-            self.level_1_reachable = sorted(self.level_1_reachable)
             
     def if_I_am_level_1(self):
         # Iterate through immediate neighbors
@@ -88,6 +66,11 @@ class FindReachable:
                     self.level_0_reachable.append(i)
                 else:
                     self.level_2_reachable.append(i)
+        
+        self.level_0_reachable = set(self.level_0_reachable)
+        self.level_0_reachable = sorted(self.level_0_reachable)
+        self.level_2_reachable = set(self.level_2_reachable)
+        self.level_2_reachable = sorted(self.level_2_reachable)
               
         # Iterate through connected nodes at level 2
         for j in self.level_2_reachable:
@@ -97,6 +80,9 @@ class FindReachable:
                     k = self.node_info[i][1]
                     if k == 3:
                         self.level_3_reachable.append(i)
+        
+        self.level_3_reachable = set(self.level_3_reachable)
+        self.level_3_reachable = sorted(self.level_3_reachable)
         
     def if_I_am_level_2(self):
         # Iterate through immediate neighbors
@@ -109,6 +95,11 @@ class FindReachable:
                 else:
                     self.level_3_reachable.append(i)
         
+        self.level_1_reachable = set(self.level_1_reachable)
+        self.level_1_reachable = sorted(self.level_1_reachable)
+        self.level_3_reachable = set(self.level_3_reachable)
+        self.level_3_reachable = sorted(self.level_3_reachable)
+        
         # Iterate through connected nodes at level 1
         for j in self.level_1_reachable:
             for i in range(len(self.graph[0])):
@@ -117,6 +108,9 @@ class FindReachable:
                     k = self.node_info[i][1]
                     if k == 0:
                         self.level_0_reachable.append(i)
+        
+        self.level_0_reachable = set(self.level_0_reachable)
+        self.level_0_reachable = sorted(self.level_0_reachable)
     
     def if_I_am_level_3(self):
         # Iterate through immediate neighbors
@@ -127,6 +121,9 @@ class FindReachable:
                 if k == 2:
                     self.level_2_reachable.append(i)
         
+        self.level_2_reachable = set(self.level_2_reachable)
+        self.level_2_reachable = sorted(self.level_2_reachable)
+        
         # Iterate through connected nodes at level 2
         for j in self.level_2_reachable:
             for i in range(len(self.graph[0])):
@@ -135,6 +132,9 @@ class FindReachable:
                     k = self.node_info[i][1]
                     if k == 1:
                         self.level_1_reachable.append(i)
+        
+        self.level_1_reachable = set(self.level_1_reachable)
+        self.level_1_reachable = sorted(self.level_1_reachable)
                         
         # Iterate through connected nodes at level 1
         for j in self.level_1_reachable:
@@ -144,6 +144,9 @@ class FindReachable:
                     k = self.node_info[i][1]
                     if k == 0:
                         self.level_0_reachable.append(i)
+        
+        self.level_0_reachable = set(self.level_0_reachable)
+        self.level_0_reachable = sorted(self.level_0_reachable)
     
 
 #Below three classes if for rewriting and defining all the classes in message.py
@@ -436,6 +439,7 @@ class UserSolution(Solution):
                     for level_2_node in self.find_reachable[self.node_id].level_2_reachable:
                         if user_request_object.target_node_id in self.find_reachable[level_2_node].level_0_reachable:
                             priority_2 = True
+                            break
                     if priority_2:
                         priority_2_list.append((request_id, user_request_object.request_begin_time))
                     else:
@@ -466,7 +470,7 @@ class UserSolution(Solution):
                     for level_2_node in my_level_2_recipients:
                         # Reading newspaper
                         how_much_one_can_eat = min(int(self.node_info_update_newspaper[level_2_node].remaining_buffer - self.node_info_update_newspaper[level_2_node].buffer_size * (1-send_to_level_2_buffer_cap)), 
-                                                   int(self.node_info_update_newspaper[level_2_node].remaining_inbound - self.node_info_update_newspaper[level_2_node].incoming_bandwidth * (1-send_to_level_2_inbound_bandwidth_cap)))
+                                                   int(self.node_info_update_newspaper[level_2_node].remaining_inbound * send_to_level_2_inbound_bandwidth_cap))
                         how_much_one_can_eat = max(how_much_one_can_eat, 0) # prevent it from going negative
                         my_level_2_recipients_how_much_they_can_eat[level_2_node] = how_much_one_can_eat
                     my_level_2_recipients_how_much_they_can_eat_in_total = 0
