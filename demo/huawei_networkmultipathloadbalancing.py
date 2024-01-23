@@ -607,5 +607,6 @@ class UserSolution(Solution):
             switchStatsInfo[integer_index] = int(integer_value_bin , 2)
             integer_index += 1
             
-        SwitchStatsInfo.info = switchStatsInfo
-        return SwitchStatsInfo
+        switchStatsInfo_2 = SwitchStatsInfo()
+        switchStatsInfo_2.info = switchStatsInfo
+        return switchStatsInfo_2
