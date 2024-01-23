@@ -205,6 +205,7 @@ class UserSolution(Solution):
         self.remaining_outbound_of_myself = self.bw_out # Night
         self.remaining_buffer_of_myself = self.size # Morning
         self.new_messages_success_added_count = 0
+        self.new_messages_temporary_storage = []
         # Find reachable (shing's work)
         self.find_reachable = []
         for i in range(len(graph[0])):
@@ -215,14 +216,10 @@ class UserSolution(Solution):
     # the access node will receive request and divide into messages   
     def add_request_list(self, request_list: List[Request]) -> None:
         for new_request in request_list:
-        # # For each request, first check if self.remaining_buffer_of_myself >= new request's size
-            if self.remaining_buffer_of_myself < new_request.data_size:
-                pass
-            else:
-                user_request_object = UserRequest(new_request.request_id, new_request.target_node_id, new_request.request_begin_time)
-                self.requests_messages_you_possess[new_request.request_id] = user_request_object
-                self.remaining_buffer_of_myself -= new_request.data_size
-                self.minor_ids_of_new_request = [i for i in range(new_request.data_size)]
+            user_request_object = UserRequest(new_request.request_id, new_request.target_node_id, new_request.request_begin_time)
+            user_request_object.message_id = [i for i in range(new_request.data_size)]
+            self.new_messages_temporary_storage.append(user_request_object)
+            
         # Iterate through every request in List[Request]
         # # For each request, first check if self.remaining_buffer_of_myself >= new request's size 
         # If <, then ignore this entire request. Yes this will be detrimental to our success rate (hence our final score), but bopian
@@ -306,6 +303,18 @@ class UserSolution(Solution):
                                     self.requests_messages_you_possess[new_user_request.request_id].insert_message(new_user_request.message_id)
                                 counting_receive_success += len(new_user_request.message_id)
                     self.remaining_buffer_of_myself -= counting_receive_success
+            # Add new requests here
+            self.new_messages_success_added_count = 0
+            for user_request_object in self.new_messages_temporary_storage:
+                if self.remaining_buffer_of_myself < len(user_request_object.message_id): # Not enough storage
+                    pass
+                else: # enough storage
+                    self.requests_messages_you_possess[user_request_object.request_id] = user_request_object
+                    self.remaining_buffer_of_myself -= len(user_request_object.message_id)
+                    self.new_messages_success_added_count + len(user_request_object.message_id)
+            self.new_messages_temporary_storage = []
+        
+            return self.run_algorithm()
         
         # If you are controller
         elif self.level == 4:
@@ -366,11 +375,14 @@ class UserSolution(Solution):
                     pass
                 else: # Problem of not enough buffer
                     self.node_info_update_newspaper[i].remaining_inbound = max(0, self.node_info_update_newspaper[i].remaining_inbound - node_info_failed_to_receive[i])
-
-        
-        
+            
+            return []
+    
+    # Guys, our algorithm is here
+    def run_algorithm(self) -> List[Message]:
+        # Run our algorithm here
+        # Let me think think
         return []
-        
         
     # 1. take result: List[Tuple[Message, bool]] and extract out the Message
     # 2. create success dict and fail dict 
