@@ -400,8 +400,10 @@ class UserSolution(Solution):
         # Run our algorithm here
         # Let me think think
         message_to_send = []
-        message_count = 0
+        remaining_messages_I_can_send = self.remaining_outbound_of_myself
         if self.level == 1:
+            send_to_level_2_buffer_cap = 0.6                                    # Feel free to adjust
+            send_to_level_2_inbound_bandwidth_cap = 0.8                         # Feel free to adjust
             priority_1_list = [] # From level 1 directly to level 0
             priority_2_list = [] # From level 1 to level 2 then can reach back level 1 and level 0
             priority_3_list = [] # From level 1 to level 2 then level 3, then back to level 2 and back to level 1, and finally reach level 0
@@ -420,12 +422,157 @@ class UserSolution(Solution):
             priority_1_list = sorted(priority_1_list, key=lambda x: x[1]) # Sort by request_begin_time because we need to take care of the latency which is part of the scoring
             priority_2_list = sorted(priority_1_list, key=lambda x: x[1]) # Sort by request_begin_time because we need to take care of the latency which is part of the scoring
             priority_3_list = sorted(priority_1_list, key=lambda x: x[1]) # Sort by request_begin_time because we need to take care of the latency which is part of the scoring
-            for tup in priority_1_list:
-                user_request_object = self.requests_messages_you_possess[tup[0]]
-                
-                
             
-        return []
+            for tup in priority_1_list: # tup means tuple
+                if remaining_messages_I_can_send > 0:
+                    user_request_object = self.requests_messages_you_possess[tup[0]] # tup[0] is request_id
+                    number_to_send = min(len(user_request_object.message_id), remaining_messages_I_can_send)
+                    for i in range(number_to_send):
+                        message = Message(self.node_id, user_request_object.target_node_id, user_request_object.target_node_id, 
+                                          user_request_object.request_id, user_request_object.message_id[i], user_request_object.request_begin_time)
+                        message_to_send.append(message)
+                        remaining_messages_I_can_send -= 1
+            
+            for tup in priority_2_list: # tup means tuple
+                if remaining_messages_I_can_send > 0:
+                    user_request_object = self.requests_messages_you_possess[tup[0]] # tup[0] is request_id
+                    how_much_I_can_send = min(len(user_request_object.message_id), remaining_messages_I_can_send)
+                    my_level_2_recipients = []
+                    for level_2_node in self.find_reachable[self.node_id].level_2_reachable:
+                        if user_request_object.target_node_id in self.find_reachable[level_2_node].level_0_reachable:
+                            my_level_2_recipients.append(level_2_node)
+                    my_level_2_recipients_how_much_they_can_eat = {} # {level_2_node: how_much_one_can_eat}
+                    for level_2_node in my_level_2_recipients:
+                        # Reading newspaper
+                        how_much_one_can_eat = min(int(self.node_info_update_newspaper[level_2_node].remaining_buffer - self.node_info_update_newspaper[level_2_node].buffer_size * (1-send_to_level_2_buffer_cap)), 
+                                                   int(self.node_info_update_newspaper[level_2_node].remaining_inbound - self.node_info_update_newspaper[level_2_node].incoming_bandwidth * (1-send_to_level_2_inbound_bandwidth_cap)))
+                        how_much_one_can_eat = max(how_much_one_can_eat, 0) # prevent it from going negative
+                        my_level_2_recipients_how_much_they_can_eat[level_2_node] = how_much_one_can_eat
+                    my_level_2_recipients_how_much_they_can_eat_in_total = 0
+                    for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat:
+                        my_level_2_recipients_how_much_they_can_eat_in_total += how_much_one_can_eat
+                    if my_level_2_recipients_how_much_they_can_eat_in_total <= how_much_I_can_send:
+                        # I can send more than they can eat, so the number I will send is exactly how much each of them can eat
+                        # No need to allocate
+                        my_level_2_recipients_how_much_I_allocate = my_level_2_recipients_how_much_they_can_eat
+                    else: #my_level_2_recipients_how_much_they_can_eat_in_total > how_much_I_can_send
+                        # Need to allocate, very mafan one
+                        # Allocate according to the ratio of how much they can eat
+                        # Beause you want to spread out to more level 2 nodes
+                        my_level_2_recipients_how_much_I_allocate = {}
+                        my_level_2_recipients_how_much_I_allocate_in_total = 0
+                        for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat:
+                            how_much_I_allocate = int( (my_level_2_recipients_how_much_they_can_eat[level_2_node] / my_level_2_recipients_how_much_they_can_eat_in_total) * how_much_I_can_send )
+                            my_level_2_recipients_how_much_I_allocate[level_2_node] = how_much_I_allocate
+                            my_level_2_recipients_how_much_I_allocate_in_total += how_much_I_allocate
+                        # Handle situation where my_level_2_recipients_how_much_I_allocate_in_total != how_much_I_can_send 
+                        # Due to existence of some remainders due to rounding down / rounding up
+                        while my_level_2_recipients_how_much_I_allocate_in_total < how_much_I_can_send: # Some remainders due to rounding down / rounding up
+                            # Just randomly allocate to the level_2_nodes
+                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate:
+                                if my_level_2_recipients_how_much_I_allocate_in_total < how_much_I_can_send: # Some remainder due to rounding down / rounding up
+                                    my_level_2_recipients_how_much_I_allocate[level_2_node] += 1
+                                    my_level_2_recipients_how_much_I_allocate_in_total += 1
+                                else:
+                                    break
+                        while my_level_2_recipients_how_much_I_allocate_in_total > how_much_I_can_send: # Some remainders due to rounding down / rounding up
+                            # Just randomly allocate to the level_2_nodes
+                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate:
+                                if my_level_2_recipients_how_much_I_allocate_in_total > how_much_I_can_send: # Some remainders due to rounding down / rounding up
+                                    my_level_2_recipients_how_much_I_allocate[level_2_node] -= 1
+                                    my_level_2_recipients_how_much_I_allocate_in_total -= 1
+                                else:
+                                    break
+                    # So now we have finished allocation and the dictionary my_level_2_recipients_how_much_I_allocate is now ready
+                    # Also how much I allocate in total is guaranteed to be <= how_much_I_can_send
+                    # So now I will send messages (means now I will put messages into message_to_send list)
+                    index = 0
+                    for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate:
+                        while how_much_I_allocate > 0:
+                            message = Message(self.node_id, level_2_node, user_request_object.target_node_id, 
+                                                user_request_object.request_id, user_request_object.message_id[index], user_request_object.request_begin_time)
+                            message_to_send.append(message)
+                            remaining_messages_I_can_send -= 1
+                            how_much_I_allocate -= 1
+                            index += 1
+                    
+            for tup in priority_3_list: # tup means tuple
+                if remaining_messages_I_can_send > 0:
+                    user_request_object = self.requests_messages_you_possess[tup[0]] # tup[0] is request_id
+                    how_much_I_can_send = min(len(user_request_object.message_id), remaining_messages_I_can_send)
+                    my_level_2_recipients = []
+                    for level_2_node in self.find_reachable[self.node_id].level_2_reachable:
+                        reachable = False
+                        for level_3_node in self.find_reachable[level_2_node].level_3_reachable:
+                            if user_request_object.target_node_id in self.find_reachable[level_3_node].level_0_reachable:
+                                reachable = True
+                                break
+                        if reachable:
+                            my_level_2_recipients.append(level_2_node)
+                    my_level_2_recipients_how_much_they_can_eat = {} # {level_2_node: how_much_one_can_eat}
+                    for level_2_node in my_level_2_recipients:
+                        # Reading newspaper
+                        how_much_one_can_eat = min(int(self.node_info_update_newspaper[level_2_node].remaining_buffer - self.node_info_update_newspaper[level_2_node].buffer_size * (1-send_to_level_2_buffer_cap)), 
+                                                   int(self.node_info_update_newspaper[level_2_node].remaining_inbound - self.node_info_update_newspaper[level_2_node].incoming_bandwidth * (1-send_to_level_2_inbound_bandwidth_cap)))
+                        how_much_one_can_eat = max(how_much_one_can_eat, 0) # prevent it from going negative
+                        my_level_2_recipients_how_much_they_can_eat[level_2_node] = how_much_one_can_eat
+                    my_level_2_recipients_how_much_they_can_eat_in_total = 0
+                    for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat:
+                        my_level_2_recipients_how_much_they_can_eat_in_total += how_much_one_can_eat
+                    if my_level_2_recipients_how_much_they_can_eat_in_total <= how_much_I_can_send:
+                        # I can send more than they can eat, so the number I will send is exactly how much each of them can eat
+                        # No need to allocate
+                        my_level_2_recipients_how_much_I_allocate = my_level_2_recipients_how_much_they_can_eat
+                    else: #my_level_2_recipients_how_much_they_can_eat_in_total > how_much_I_can_send
+                        # Need to allocate, very mafan one
+                        # Allocate according to the ratio of how much they can eat
+                        # Beause you want to spread out to more level 2 nodes
+                        my_level_2_recipients_how_much_I_allocate = {}
+                        my_level_2_recipients_how_much_I_allocate_in_total = 0
+                        for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat:
+                            how_much_I_allocate = int( (my_level_2_recipients_how_much_they_can_eat[level_2_node] / my_level_2_recipients_how_much_they_can_eat_in_total) * how_much_I_can_send )
+                            my_level_2_recipients_how_much_I_allocate[level_2_node] = how_much_I_allocate
+                            my_level_2_recipients_how_much_I_allocate_in_total += how_much_I_allocate
+                        # Handle situation where my_level_2_recipients_how_much_I_allocate_in_total != how_much_I_can_send 
+                        # Due to existence of some remainders due to rounding down / rounding up
+                        while my_level_2_recipients_how_much_I_allocate_in_total < how_much_I_can_send: # Some remainders due to rounding down / rounding up
+                            # Just randomly allocate to the level_2_nodes
+                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate:
+                                if my_level_2_recipients_how_much_I_allocate_in_total < how_much_I_can_send: # Some remainder due to rounding down / rounding up
+                                    my_level_2_recipients_how_much_I_allocate[level_2_node] += 1
+                                    my_level_2_recipients_how_much_I_allocate_in_total += 1
+                                else:
+                                    break
+                        while my_level_2_recipients_how_much_I_allocate_in_total > how_much_I_can_send: # Some remainders due to rounding down / rounding up
+                            # Just randomly allocate to the level_2_nodes
+                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate:
+                                if my_level_2_recipients_how_much_I_allocate_in_total > how_much_I_can_send: # Some remainders due to rounding down / rounding up
+                                    my_level_2_recipients_how_much_I_allocate[level_2_node] -= 1
+                                    my_level_2_recipients_how_much_I_allocate_in_total -= 1
+                                else:
+                                    break
+                    # So now we have finished allocation and the dictionary my_level_2_recipients_how_much_I_allocate is now ready
+                    # Also how much I allocate in total is guaranteed to be <= how_much_I_can_send
+                    # So now I will send messages (means now I will put messages into message_to_send list)
+                    index = 0
+                    for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate:
+                        while how_much_I_allocate > 0:
+                            message = Message(self.node_id, level_2_node, user_request_object.target_node_id, 
+                                                user_request_object.request_id, user_request_object.message_id[index], user_request_object.request_begin_time)
+                            message_to_send.append(message)
+                            remaining_messages_I_can_send -= 1
+                            how_much_I_allocate -= 1
+                            index += 1
+        
+        elif self.level == 2:
+            
+            pass
+        
+        elif self.level == 3:
+            
+            pass
+        
+        return message_to_send
         
     # 1. take result: List[Tuple[Message, bool]] and extract out the Message
     # 2. create success dict and fail dict 
