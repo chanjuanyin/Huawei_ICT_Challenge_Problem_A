@@ -245,11 +245,14 @@ class UserSolution(Solution):
         # If you are level 1, 2, 3
         if self.level == 1 or self.level == 2 or self.level == 3:
             for switchStatsInfo in neighbor_info_list:
-                sender_node_id = (switchStatsInfo[0] & 0xFF000000) >> 24
+                if len(switchStatsInfo.info) == 0:
+                    continue
+                
+                sender_node_id = (switchStatsInfo.info[0] & 0xFF000000) >> 24
                 
                 # A normal node receiving news reporting from the controller
                 if sender_node_id == 255:
-                    for node_id, node_news_update_int in enumerate(switchStatsInfo[1:len(self.graph[0])+1]):
+                    for node_id, node_news_update_int in enumerate(switchStatsInfo.info[1:len(self.graph[0])+1]):
                         remaining_buffer = ( node_news_update_int & 0xFFE00000) >> 21
                         remaining_inbound = ( node_news_update_int & 0x1FF800) >> 11
                         remaining_outbound = ( node_news_update_int & 0x7F8) >> 3
@@ -257,13 +260,17 @@ class UserSolution(Solution):
                         self.node_info_update_newspaper[node_id].remaining_inbound = remaining_inbound
                         self.node_info_update_newspaper[node_id].remaining_outbound = remaining_outbound
                 
+                # Server at level 0 speaking
+                elif sender_node_id == 254:
+                    continue
+                
                 # A normal node receiving messages from ohter normal nodes
                 else:
                     continue_read = True
                     counting_receive_success = 0
                     integer_to_read_index = 1
                     while continue_read:
-                        integer_to_read = switchStatsInfo[integer_to_read_index]
+                        integer_to_read = switchStatsInfo.info[integer_to_read_index]
                         request_message_recipient = ( integer_to_read & 0xFF000000) >> 24
                         if request_message_recipient == 255:
                             continue_read = False
@@ -274,27 +281,27 @@ class UserSolution(Solution):
                             continue
                         else:
                             request_id = ( integer_to_read & 0x0000FFF8) >> 3
-                            request_begin_time = ( switchStatsInfo[integer_to_read_index+1] & 0xFF000000) >> 24
+                            request_begin_time = ( switchStatsInfo.info[integer_to_read_index+1] & 0xFF000000) >> 24
                             new_user_request = UserRequest(request_id, target_node_id, request_begin_time)
                             integer_to_read_index += 1
-                            message_from = ( switchStatsInfo[integer_to_read_index] & 0x1FC00) >> 10
-                            message_to = ( switchStatsInfo[integer_to_read_index] & 0x3F8) >> 3
+                            message_from = ( switchStatsInfo.info[integer_to_read_index] & 0x1FC00) >> 10
+                            message_to = ( switchStatsInfo.info[integer_to_read_index] & 0x3F8) >> 3
                             new_user_request.insert_message(list(range(message_from, message_to)))
-                            continue_read_2 = ( switchStatsInfo[integer_to_read_index] & 0x4) >> 2
+                            continue_read_2 = ( switchStatsInfo.info[integer_to_read_index] & 0x4) >> 2
                             integer_to_read_index += 1
                             while continue_read_2:
-                                message_from = ( switchStatsInfo[integer_to_read_index] & 0xFE000000) >> 25
-                                message_to = ( switchStatsInfo[integer_to_read_index] & 0x1FC0000) >> 18
+                                message_from = ( switchStatsInfo.info[integer_to_read_index] & 0xFE000000) >> 25
+                                message_to = ( switchStatsInfo.info[integer_to_read_index] & 0x1FC0000) >> 18
                                 new_user_request.insert_message(list(range(message_from, message_to)))
-                                continue_read_2 = ( switchStatsInfo[integer_to_read_index] & 0x20000) >> 17
+                                continue_read_2 = ( switchStatsInfo.info[integer_to_read_index] & 0x20000) >> 17
                                 if continue_read_2==0:
                                     integer_to_read_index += 1
                                     continue
                                 else:
-                                    message_from = ( switchStatsInfo[integer_to_read_index] & 0x1FC00) >> 10
-                                    message_to = ( switchStatsInfo[integer_to_read_index] & 0x3F8) >> 3
+                                    message_from = ( switchStatsInfo.info[integer_to_read_index] & 0x1FC00) >> 10
+                                    message_to = ( switchStatsInfo.info[integer_to_read_index] & 0x3F8) >> 3
                                     new_user_request.insert_message(list(range(message_from, message_to)))
-                                    continue_read_2 = ( switchStatsInfo[integer_to_read_index] & 0x4) >> 2
+                                    continue_read_2 = ( switchStatsInfo.info[integer_to_read_index] & 0x4) >> 2
                                     integer_to_read_index += 1
                             if request_message_recipient == self.node_id:
                                 if new_user_request.request_id not in self.requests_messages_you_possess:
@@ -321,17 +328,19 @@ class UserSolution(Solution):
             node_info_successfully_received = [0 for i in range(len(self.graph[0]))]
             node_info_failed_to_receive = [0 for i in range(len(self.graph[0]))]
             for switchStatsInfo in neighbor_info_list:
-                sender_node_id = (switchStatsInfo[0] & 0xFF000000) >> 24
-                sender_remaining_outbound = (switchStatsInfo[0] & 0x00FF0000) >> 16
+                sender_node_id = (switchStatsInfo.info[0] & 0xFF000000) >> 24
+                if sender_node_id == 254:
+                    continue
+                sender_remaining_outbound = (switchStatsInfo.info[0] & 0x00FF0000) >> 16
                 self.node_info_update_newspaper[sender_node_id].remaining_outbound = sender_remaining_outbound
-                sender_received_new_requests = (switchStatsInfo[0] & 0xFFE0) >> 5
+                sender_received_new_requests = (switchStatsInfo.info[0] & 0xFFE0) >> 5
                 self.node_info_update_newspaper[sender_node_id].remaining_buffer -= sender_received_new_requests
                 
                 # Let me think
                 continue_read = True
                 integer_to_read_index = 1
                 while continue_read:
-                    integer_to_read = switchStatsInfo[integer_to_read_index]
+                    integer_to_read = switchStatsInfo.info[integer_to_read_index]
                     request_message_recipient = ( integer_to_read & 0xFF000000) >> 24
                     if request_message_recipient == 255:
                         continue_read = False
@@ -344,27 +353,27 @@ class UserSolution(Solution):
                         continue
                     else:
                         request_id = ( integer_to_read & 0x0000FFF8) >> 3
-                        request_begin_time = ( switchStatsInfo[integer_to_read_index+1] & 0xFF000000) >> 24
+                        request_begin_time = ( switchStatsInfo.info[integer_to_read_index+1] & 0xFF000000) >> 24
                         new_user_request = UserRequest(request_id, target_node_id, request_begin_time)
                         integer_to_read_index += 1
-                        message_from = ( switchStatsInfo[integer_to_read_index] & 0x1FC00) >> 10
-                        message_to = ( switchStatsInfo[integer_to_read_index] & 0x3F8) >> 3
+                        message_from = ( switchStatsInfo.info[integer_to_read_index] & 0x1FC00) >> 10
+                        message_to = ( switchStatsInfo.info[integer_to_read_index] & 0x3F8) >> 3
                         new_user_request.insert_message(list(range(message_from, message_to)))
-                        continue_read_2 = ( switchStatsInfo[integer_to_read_index] & 0x4) >> 2
+                        continue_read_2 = ( switchStatsInfo.info[integer_to_read_index] & 0x4) >> 2
                         integer_to_read_index += 1
                         while continue_read_2:
-                            message_from = ( switchStatsInfo[integer_to_read_index] & 0xFE000000) >> 25
-                            message_to = ( switchStatsInfo[integer_to_read_index] & 0x1FC0000) >> 18
+                            message_from = ( switchStatsInfo.info[integer_to_read_index] & 0xFE000000) >> 25
+                            message_to = ( switchStatsInfo.info[integer_to_read_index] & 0x1FC0000) >> 18
                             new_user_request.insert_message(list(range(message_from, message_to)))
-                            continue_read_2 = ( switchStatsInfo[integer_to_read_index] & 0x20000) >> 17
+                            continue_read_2 = ( switchStatsInfo.info[integer_to_read_index] & 0x20000) >> 17
                             if continue_read_2==0:
                                 integer_to_read_index += 1
                                 continue
                             else:
-                                message_from = ( switchStatsInfo[integer_to_read_index] & 0x1FC00) >> 10
-                                message_to = ( switchStatsInfo[integer_to_read_index] & 0x3F8) >> 3
+                                message_from = ( switchStatsInfo.info[integer_to_read_index] & 0x1FC00) >> 10
+                                message_to = ( switchStatsInfo.info[integer_to_read_index] & 0x3F8) >> 3
                                 new_user_request.insert_message(list(range(message_from, message_to)))
-                                continue_read_2 = ( switchStatsInfo[integer_to_read_index] & 0x4) >> 2
+                                continue_read_2 = ( switchStatsInfo.info[integer_to_read_index] & 0x4) >> 2
                                 integer_to_read_index += 1
                         self.node_info_update_newspaper[sender_node_id].remaining_buffer += len(new_user_request.message_id)
                         self.node_info_update_newspaper[request_message_recipient].remaining_buffer -= len(new_user_request.message_id)
@@ -377,11 +386,16 @@ class UserSolution(Solution):
                     self.node_info_update_newspaper[i].remaining_inbound = max(0, self.node_info_update_newspaper[i].remaining_inbound - node_info_failed_to_receive[i])
             
             return []
+
+        else: # self.level == 0:
+            return []
+            
     
     # Guys, our algorithm is here
     def run_algorithm(self) -> List[Message]:
         # Run our algorithm here
         # Let me think think
+        
         return []
         
     # 1. take result: List[Tuple[Message, bool]] and extract out the Message
