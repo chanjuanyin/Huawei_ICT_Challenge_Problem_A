@@ -135,11 +135,11 @@ class UserRequest:
         self.message_id: List[int] = [] # MinorId
     def insert_message(self, int_list: List[int]):
         merged_list=list(set(int_list) | set(self.message_id))
-        self.message_id=merged_list
+        self.message_id=sorted(merged_list)
         
     def delete_message(self,int_list: List[int]):
         deleted_list=list(set(self.message_id)-set(int_list))
-        self.message_id=deleted_list
+        self.message_id=sorted(deleted_list)
 
 
 """define SwtichsStatsInfo here or just create another class in this file
@@ -165,11 +165,14 @@ what to do   1.  a controler view of SwitchStatsInfo, including
                     2.2.1 where the message will send to, to_node_id                            bitsize=8
                     2.2.2 final destination, target_node_id                                     bitsize=8
                     2.2.3 Request Id(Major Id) that I send                                      bitsize=13
-                    2.2.4 from minor id (7 bits), to minor id (7 bits), continue read? (1 bit)  bitsize=15 X number of messages
+                                                                                                total bitsize=29
+                    2.2.4 Request begin time from 0 to 200                                      bitsize=8 + 7 blank space
+                    2.2.5 from minor id (7 bits), to minor id (7 bits), continue read? (1 bit)  bitsize=15 X number of messages
                     
                     For failure messages at t=j:
                     2.3.1 where the message will send to, to_node_id                            bitsize=8
-                    2.2.2 255 to denote you failed                                              bitsize=8
+                    2.3.2 255 to denote you failed                                              bitsize=8
+                    2.3.3 how many you failed                                                   bitsize=8
                     Just ignore:
                     2.4.1 255 to denote please don't read                                       bitsize=8
 
@@ -201,7 +204,7 @@ class UserSolution(Solution):
         # Information that you know tonight before you sleep / tomorrow morning soon after you wake up
         self.remaining_outbound_of_myself = self.bw_out # Night
         self.remaining_buffer_of_myself = self.size # Morning
-        
+        self.new_messages_success_added_count = 0
         # Find reachable (shing's work)
         self.find_reachable = []
         for i in range(len(graph[0])):
@@ -234,21 +237,27 @@ class UserSolution(Solution):
         #   Everything in this indentation is within the >= logic of the if-else statement
         pass
 
-
-    #1. It takes neigbours SwitchStatsInfo (including cluster controller)
-    #2. Updates its own SwitchStatsInfo, such as buffer size 
-    #3. The method needs to make a decision of which  path to send
-    #4. and the simulator will return a message than contains all the successful and fails one
+    #pre-define : neighbor_info_list for normal node
+    #1. Normal node takes controller's newspaper and updates its own newspaper to current
+    #2  Normal node will take neibours' SwitchStatsInfos
+    #2. The normal node needs to make a decision: List[Message] of which path to send
+    #3. And the simulator will return a message than contains all the successful and fails one
+    #4. Controller updates its own newspaper, such as buffer size 
+    #5. Normal nodes will updates its own SwitchStatInfo
     def ask_round_solution(self, neighbor_info_list: List[SwitchStatsInfo]) -> List[Message]:
         
         
         return []
         
         
-    # 1. take result: List[Tuple[Message, bool]]
-    # 2. decode and update it to SwitchStatsInfo, the SwicthStatsInfo should be coincides with message
-    # 3. return SwitchStatsInfo(including cluster controller)
+    # 1. take result: List[Tuple[Message, bool]] and extract out the Message
+    # 2. create success dict and fail dict 
+    # 2. decode the message and update the SwitchStatsInfo
+    # 3. return SwitchStatsInfo
     def next_round(self, result: List[Tuple[Message, bool]]) -> SwitchStatsInfo:
+        
+         #this is to transform number to binary number, maybe we can put it outside
+        
         #count for success and fail messages
         success, fail = 0,0
         for message_result in result:
@@ -257,36 +266,170 @@ class UserSolution(Solution):
             else:
                 fail+=1
         
+        def bin_tran(num):
+        # Assuming a 16-bit binary representation
+            return format(num, '032b')
         
-                # Information communication between node
-
-        #cluster controller, actually won't get any result
-        if self.level==4:
-            pass
+        def get_minor_id_range_list(self, userRequest):
+            minor_id_range_list = [] # It is a list of list, every list inside will be minor id to minor id for one request
+            message_id_list = userRequest.message_id
+            slow , fast = 0 ,0
+            while fast < len(message_id_list):
+                message_id_fast = message_id_list[fast]
+                while fast < len(message_id_list) and message_id_fast in message_id_list:
+                    message_id_fast += 1
+                    fast += 1
+                minor_id_range_list.append([message_id_list[slow],message_id_list[fast-1]+1])
+                slow = fast
+            return minor_id_range_list
+                
+        #create a succeess-fail list to let controller to update the newspaper
         
-        #other nodes
-        else:
-            pass
+        #decode the message
+        """update SwtichStatsInfo"""
+        
+        #below should be put in ask_round solution
+        #update self.node_info_update_newspaper := List[NodePlaceHolder* 208]
+   
+    # assume that buffer_size will not be penalized (double check later)
+    #if not enough buffer size(can be verified by success < remaining_inbound & fail !=0):
+    #for to_node_id, there might be multiple ids in the result, so i have to create a id list and for loop it
+        success_dict={} #success_dict = {to_node_id : {request_id : UserRequest Object} , , , ,}
+        fail_dict={} #fail_dict = {to_node_id : counts}
+        
+        #append success dict
+        for pair in result:
+            Message=pair[0]
+            bool=pair[1]
+            #Message classs remains to be defined
+            if bool:
+                if Message.to_node_id not in success_dict:
+                    success_dict[Message.to_node_id] = {}
+                    # So this dictionary is of the format {request_id: UserRequest()}
+                else:
+                    request_id_dict = success_dict[Message.to_node_id]
+                    if Message.request_id not in request_id_dict:
+                        request_id_dict[Message.request_id] = UserRequest(Message.request_id, Message.target_node_id, Message.request_begin_time)
+                        request_id_dict[Message.request_id].message_id.append(Message.message_id)
+                    else:
+                        # The UserRequest object can be obtained by request_id_dict[Message.request_id]
+                        request_id_dict[Message.request_id].message_id.append(Message.message_id)
+                # Change your data bank
+                self.requests_messages_you_possess[Message.request_id].delete_message(Message.message_id)
+                
+                
+            #append fail dict
+            else:
+                if Message.to_node_id not in fail_dict:
+                    fail_dict[Message.to_node_id] = 1
+                else:
+                    fail_dict[Message.to_node_id] += 1
+        
+        
+        
+        
+        switchStatsInfo = [0 for i in range(256)]
+        integer_index = 0
+        # Work something on the first int
+        bin_first_int = bin_tran(switchStatsInfo[0])
+        self.remaining_outbound_of_myself -= fail
+        remaining_outbound_bin = bin_tran(self.remaining_outbound_of_myself)
+        bin_first_int[8:16] = remaining_outbound_bin[24:]
+        switchStatsInfo[0] = int(bin_first_int , 2)
+        
+                
+        for to_node_id, request_id_dict in success_dict:
+            integer_index += 1  # when you swtich the to_node_id, you will need to add 1 
+            for request_id, userRequest in request_id_dict:
+                # THink about how to add into your switchStatsInfo
+                # 2.2.1 to 2.2.3
+                integer_value = switchStatsInfo[integer_index]
+                integer_value_bin = bin_tran(integer_value)
+                integer_value_bin[0:8] = bin_tran(to_node_id)[24:]
+                integer_value_bin[8:16] = bin_tran(userRequest.target_node_id)[24:]
+                integer_value_bin[16:29] = bin_tran(userRequest.request_id)[19:]
+                switchStatsInfo[integer_index] = int(integer_value_bin , 2)
+                
+                # 2.2.4 - 2.2.5
+                # the first 2.2.4 + 2.2.5 * 1
+                # the first 2.2.4
+                integer_index += 1
+                integer_value = switchStatsInfo[integer_index]
+                integer_value_bin = bin_tran(integer_value)
+                integer_value_bin[0:8] = bin_tran(userRequest.request_begin_time)[24:]
+                integer_value_bin[8:15] = "0000000"
+                
+                minor_id_range_list = self.get_minor_id_range_list(userRequest) 
+                # the first 2.2.5 * 1
+                """still need to code on"""
+                first_range = minor_id_range_list[0]
+                integer_value_bin[15:29] 
+                minor_id_range_list.pop(0)
+                
+                integer_index += 1 
+                """check if i have took care of the python index"""
+                #the rest of 2.2.5 * 2 * n
+                # You also need to think of an algorithm to keep finding the from minorID to minorID
+                # It is a list of list, every list inside will be minor id to minor id for one request
+                
+                count_range = 0
+                integer_value = switchStatsInfo[integer_index]
+                integer_value_bin = bin_tran(integer_value)
+                for Range in minor_id_range_list: #Range is a list that have 2 element as i mentioned above
+                    if count_range == 2:
+                        switchStatsInfo[integer_index] = int(integer_value_bin + "00" , 2)
+                        integer_index += 1
+                        integer_value = switchStatsInfo[integer_index]
+                        integer_value_bin = bin_tran(integer_value)
+                
+                    start_range = Range[0]
+                    end_range = Range[1]
+                    start_range_bit = bin_tran(start_range)
+                    end_range_bit = bin_tran(end_range)
+                    #combine range is a 14 binary bit
+                    combine_range = start_range_bit[25:] + end_range_bit[25:]
+                    # if sth then + "1"
+                    if minor_id_range_list[-1] == Range:
+                        integer_value_bin[0 + count_range*15 : 15 + count_range*15] = combine_range + "0"
+                        if count_range == 0:
+                            integer_value_bin[15:] = "0" * 17
+                            switchStatsInfo[integer_index] = int(integer_value_bin , 2)
+                            integer_index += 1
+                        else:
+                            switchStatsInfo[integer_index] = int(integer_value_bin + "00" , 2)
+                            integer_index += 1
+                    else:
+                        integer_value_bin[0 + count_range*15 : 15 + count_range*15] = combine_range + "1"
+                    count_range += 1
+                    #switchStatsInfo[integer_index] = int(integer_value_bin , 2)
+                
+                
+                
+        
+        for to_node_id, number_of_failure in fail_dict:
+            # add into your swtichStatsInfo to mention your failure
+        
+        # The rest of the integers will need to take care of, to_node_id should make it to 255
+        
+        
+        
+       
+        
+        
+        
+        
+      #  for pair in result:
+      #     to_node_id_dict.append(pair[0].to_node_id)
+      #    to_node_id_dict=set(sorted(to_node_id_list))
             
-        return SwitchStatsInfo()
-    
-        
-    #this is to transform number to binary number, maybe we can put it outside
-    def bin_tran(self,number:int):
-        if number<0:
-            return bin(number)[3:]
-        return bin(number)[2:]
-    
-    #define what will be the SSI like for controller
-    def Controller_SSI(self):
-        # indentifier
-        self.info.append(self.bin_tran(-1))
-        # all node remaining buffer
-        # task: how to represent remaining buffer
-
-        #self.info.append
-        
-    def Node_SSI(self,node_id):
-        # identifier
-        self.info.append(self.bin_tran(self.node_id))
-
+        for to_node_id in to_node_id_list:
+            #if not enough incoming_bandwidth: (can be verified by success==remaining_inbound & fail!=0)
+            if (fail != 0) & (success == self.node_info_update_newspaper[to_node_id].remaining_inbound):
+                #penalized sender bandout, self.node_d is sender id
+                self.node_info_update_newspaper[self.node_id].remaining_outbound -= fail
+                
+            elif (fail != 0) & (success < self.node_info_update_newspaper[to_node_id].remaining_inbound):
+                #penalize receiver bandin and sender bandout, to_node_id is receiver id, self.node_id is sender id
+                #self.node_info_update_newspaper[to_node_id].remaining_inbound -= fail
+                self.SwitchStatsInfo[0]
+                self.node_info_update_newspaper[self.node_id].remaining_outbound -= fail 
