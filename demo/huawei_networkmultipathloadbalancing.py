@@ -31,8 +31,8 @@ class FindReachable:
     def __init__(self, node_id, level, graph, node_info): # neighbors=None):
         self.node_id = node_id
         self.level = level
-        self.graph = List[List[int]]
-        self.node_info = List[Tuple[int, int, int, int, int]]
+        self.graph = graph
+        self.node_info = node_info
 
         # Check the level of the node and create attributes accordingly
         if self.level == 1:
@@ -209,7 +209,7 @@ class UserSolution(Solution):
         # Find reachable (shing's work)
         self.find_reachable = []
         for i in range(len(graph[0])):
-            find_reachable_object = FindReachable(nodes_info[i][0], nodes_info, graph, nodes_info)
+            find_reachable_object = FindReachable(nodes_info[i][0], nodes_info[i][1], graph, nodes_info)
             self.find_reachable.append(find_reachable_object)
         
     # Shing's work
@@ -395,7 +395,32 @@ class UserSolution(Solution):
     def run_algorithm(self) -> List[Message]:
         # Run our algorithm here
         # Let me think think
-        
+        message_to_send = []
+        message_count = 0
+        if self.level == 1:
+            priority_1_list = [] # From level 1 directly to level 0
+            priority_2_list = [] # From level 1 to level 2 then can reach back level 1 and level 0
+            priority_3_list = [] # From level 1 to level 2 then level 3, then back to level 2 and back to level 1, and finally reach level 0
+            for request_id, user_request_object in self.requests_messages_you_possess:
+                if user_request_object.target_node_id in self.find_reachable[self.node_id].level_0_reachable:
+                    priority_1_list.append(set(request_id, user_request_object.request_begin_time))
+                else:
+                    priority_2 = False
+                    for level_2_node in self.find_reachable[self.node_id].level_2_reachable:
+                        if user_request_object.target_node_id in self.find_reachable[level_2_node].level_0_reachable:
+                            priority_2 = True
+                    if priority_2:
+                        priority_2_list.append(set(request_id, user_request_object.request_begin_time))
+                    else:
+                        priority_3_list.append(set(request_id, user_request_object.request_begin_time))
+            priority_1_list = sorted(priority_1_list, key=lambda x: x[1]) # Sort by request_begin_time because we need to take care of the latency which is part of the scoring
+            priority_2_list = sorted(priority_1_list, key=lambda x: x[1]) # Sort by request_begin_time because we need to take care of the latency which is part of the scoring
+            priority_3_list = sorted(priority_1_list, key=lambda x: x[1]) # Sort by request_begin_time because we need to take care of the latency which is part of the scoring
+            for tup in priority_1_list:
+                user_request_object = self.requests_messages_you_possess[tup[0]]
+                
+                
+            
         return []
         
     # 1. take result: List[Tuple[Message, bool]] and extract out the Message
