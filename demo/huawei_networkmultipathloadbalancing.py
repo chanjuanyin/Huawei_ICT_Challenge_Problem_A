@@ -538,7 +538,7 @@ class UserSolution(Solution):
                     for level_2_node in my_level_2_recipients:
                         # Reading newspaper
                         how_much_one_can_eat = min(int(self.node_info_update_newspaper[level_2_node].remaining_buffer - self.node_info_update_newspaper[level_2_node].buffer_size * (1-send_to_level_2_buffer_cap)), 
-                                                   int(self.node_info_update_newspaper[level_2_node].remaining_inbound - self.node_info_update_newspaper[level_2_node].incoming_bandwidth * (1-send_to_level_2_inbound_bandwidth_cap)))
+                                                   int(self.node_info_update_newspaper[level_2_node].remaining_inbound * send_to_level_2_inbound_bandwidth_cap))
                         how_much_one_can_eat = max(how_much_one_can_eat, 0) # prevent it from going negative
                         my_level_2_recipients_how_much_they_can_eat[level_2_node] = how_much_one_can_eat
                     my_level_2_recipients_how_much_they_can_eat_in_total = 0
