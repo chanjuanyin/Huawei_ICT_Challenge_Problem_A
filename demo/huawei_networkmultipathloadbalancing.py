@@ -211,6 +211,15 @@ class UserSolution(Solution):
     # Shing's work
     # the access node will receive request and divide into messages   
     def add_request_list(self, request_list: List[Request]) -> None:
+        for new_request in request_list:
+        # # For each request, first check if self.remaining_buffer_of_myself >= new request's size
+            if self.remaining_buffer_of_myself < new_request.data_size:
+                pass
+            else:
+                user_request_object = UserRequest(new_request.request_id, new_request.target_node_id, new_request.request_begin_time)
+                self.requests_messages_you_possess[new_request.request_id] = user_request_object
+                self.remaining_buffer_of_myself -= new_request.data_size
+                self.minor_ids_of_new_request = [i for i in range(new_request.data_size)]
         # Iterate through every request in List[Request]
         # # For each request, first check if self.remaining_buffer_of_myself >= new request's size 
         # If <, then ignore this entire request. Yes this will be detrimental to our success rate (hence our final score), but bopian
