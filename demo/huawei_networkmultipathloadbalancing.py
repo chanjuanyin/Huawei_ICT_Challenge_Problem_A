@@ -41,6 +41,13 @@ class FindReachable:
             self.level_3_reachable = []
             
             self.if_I_am_level_1()
+            
+            self.level_0_reachable = set(self.level_0_reachable)
+            self.level_0_reachable = sorted(self.level_0_reachable)
+            self.level_2_reachable = set(self.level_2_reachable)
+            self.level_2_reachable = sorted(self.level_2_reachable)
+            self.level_3_reachable = set(self.level_3_reachable)
+            self.level_3_reachable = sorted(self.level_3_reachable)
 
         elif self.level == 2:
             self.level_1_reachable = []
@@ -48,6 +55,14 @@ class FindReachable:
             self.level_0_reachable = []
             
             self.if_I_am_level_2()
+            
+            self.level_0_reachable = set(self.level_0_reachable)
+            self.level_0_reachable = sorted(self.level_0_reachable)
+            self.level_1_reachable = set(self.level_1_reachable)
+            self.level_1_reachable = sorted(self.level_1_reachable)
+            self.level_3_reachable = set(self.level_3_reachable)
+            self.level_3_reachable = sorted(self.level_3_reachable)
+
 
         elif self.level == 3:
             self.level_2_reachable = []
@@ -56,6 +71,12 @@ class FindReachable:
             
             self.if_I_am_level_3()
             
+            self.level_0_reachable = set(self.level_0_reachable)
+            self.level_0_reachable = sorted(self.level_0_reachable)
+            self.level_2_reachable = set(self.level_2_reachable)
+            self.level_2_reachable = sorted(self.level_2_reachable)
+            self.level_1_reachable = set(self.level_1_reachable)
+            self.level_1_reachable = sorted(self.level_1_reachable)
             
     def if_I_am_level_1(self):
         # Iterate through immediate neighbors
@@ -409,16 +430,16 @@ class UserSolution(Solution):
             priority_3_list = [] # From level 1 to level 2 then level 3, then back to level 2 and back to level 1, and finally reach level 0
             for request_id, user_request_object in self.requests_messages_you_possess:
                 if user_request_object.target_node_id in self.find_reachable[self.node_id].level_0_reachable:
-                    priority_1_list.append(set(request_id, user_request_object.request_begin_time))
+                    priority_1_list.append((request_id, user_request_object.request_begin_time))
                 else:
                     priority_2 = False
                     for level_2_node in self.find_reachable[self.node_id].level_2_reachable:
                         if user_request_object.target_node_id in self.find_reachable[level_2_node].level_0_reachable:
                             priority_2 = True
                     if priority_2:
-                        priority_2_list.append(set(request_id, user_request_object.request_begin_time))
+                        priority_2_list.append((request_id, user_request_object.request_begin_time))
                     else:
-                        priority_3_list.append(set(request_id, user_request_object.request_begin_time))
+                        priority_3_list.append((request_id, user_request_object.request_begin_time))
             priority_1_list = sorted(priority_1_list, key=lambda x: x[1]) # Sort by request_begin_time because we need to take care of the latency which is part of the scoring
             priority_2_list = sorted(priority_1_list, key=lambda x: x[1]) # Sort by request_begin_time because we need to take care of the latency which is part of the scoring
             priority_3_list = sorted(priority_1_list, key=lambda x: x[1]) # Sort by request_begin_time because we need to take care of the latency which is part of the scoring
