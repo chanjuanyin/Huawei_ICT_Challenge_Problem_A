@@ -279,7 +279,7 @@ class UserSolution(Solution):
     # the access node will receive request and divide into messages   
     def add_request_list(self, request_list: List[Request]) -> None:
         for new_request in request_list:
-            user_request_object = UserRequest(new_request.request_id, new_request.target_node_id, new_request.request_begin_time)
+            user_request_object = UserRequest(new_request.request_id, new_request.target_node_id, new_request.begin_time)
             user_request_object.message_id = [i for i in range(new_request.data_size)]
             self.new_messages_temporary_storage.append(user_request_object)
             
