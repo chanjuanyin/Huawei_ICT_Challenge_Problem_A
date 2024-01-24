@@ -707,8 +707,8 @@ class UserSolution(Solution):
             """2.2.1 to 2.2.5"""     
             #two for loop, the outer loop is different to_node_id
             #              the inner loop is different request_id   
-            for to_node_id, request_id_dict in success_dict:
-                for request_id, userRequest in request_id_dict:
+            for to_node_id, request_id_dict in success_dict.items():
+                for request_id, userRequest in request_id_dict.items():
                     # 2.2.1 to 2.2.3
                     integer_value = switchStatsInfo[integer_index]
                     integer_value_bin = bin_tran(integer_value)
@@ -769,7 +769,7 @@ class UserSolution(Solution):
                             integer_value_bin[0 + count_range*15 : 15 + count_range*15] = combine_range + "1"
                         count_range += 1
                     
-            for to_node_id, number_of_failure in fail_dict: # add into your swtichStatsInfo to mention your failure
+            for to_node_id, number_of_failure in fail_dict.items(): # add into your swtichStatsInfo to mention your failure
                 integer_value = switchStatsInfo[integer_index]
                 integer_value_bin = bin_tran(integer_value)
                 integer_value_bin[0:8] = bin_tran(to_node_id)[24:]
