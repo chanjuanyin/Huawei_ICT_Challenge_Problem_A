@@ -482,8 +482,8 @@ class UserSolution(Solution):
                     else:
                         priority_3_list.append((request_id, user_request_object.request_begin_time))
             priority_1_list = sorted(priority_1_list, key=lambda x: x[1]) # Sort by request_begin_time because we need to take care of the latency which is part of the scoring
-            priority_2_list = sorted(priority_1_list, key=lambda x: x[1]) # Sort by request_begin_time because we need to take care of the latency which is part of the scoring
-            priority_3_list = sorted(priority_1_list, key=lambda x: x[1]) # Sort by request_begin_time because we need to take care of the latency which is part of the scoring
+            priority_2_list = sorted(priority_2_list, key=lambda x: x[1]) # Sort by request_begin_time because we need to take care of the latency which is part of the scoring
+            priority_3_list = sorted(priority_3_list, key=lambda x: x[1]) # Sort by request_begin_time because we need to take care of the latency which is part of the scoring
             
             for tup in priority_1_list: # tup means tuple
                 if remaining_messages_I_can_send > 0:
