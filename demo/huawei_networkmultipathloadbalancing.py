@@ -391,6 +391,8 @@ class UserSolution(Solution):
             node_info_successfully_received = [0 for i in range(len(self.graph[0]))]
             node_info_failed_to_receive = [0 for i in range(len(self.graph[0]))]
             for switchStatsInfo in neighbor_info_list:
+                if len(switchStatsInfo.info) == 0:
+                    continue
                 sender_node_id = (switchStatsInfo.info[0] & 0xFF000000) >> 24
                 if sender_node_id == 254:
                     continue
