@@ -6,10 +6,10 @@ from solution_common.solution import Solution
 #this class serves for the node information 101 for each node
 class NodePlaceholder:
 
-    def __init__(self, id, level,buffer_size, incoming_bandwidth, outgoing_bandwidth, 
+    def __init__(self, node_id, level, buffer_size, incoming_bandwidth, outgoing_bandwidth, 
                  remaining_buffer, remaining_inbound, remaining_outbound):
         # Instance attributes
-        self.id = id
+        self.node_id = node_id
         self.level=level
         self.buffer_size = buffer_size
         self.incoming_bandwidth = incoming_bandwidth
@@ -214,16 +214,51 @@ class UserSolution(Solution):
     def __init__(self, node_id: int, bw_in: int, bw_out: int, size: int, level: int, graph: List[List[int]],
                  nodes_info: List[Tuple[int, int, int, int, int]]):
         super().__init__(node_id, bw_in, bw_out, size, level, graph, nodes_info)
-        nodes_info = sorted(nodes_info, key=lambda x: x[0])
         
-        if nodes_info[0][0]==-1:
-            nodes_info = nodes_info[1:]
+        # nodes_info: List[Tuple[int, int, int, level, node_id]]
+        # 
+        # Our original thinking (also this is the ordering of our self-defined self.nodes_info):
+        # Position 0: node_id
+        # Position 1: level
+        # Position 2: inbound_bandwidth
+        # Position 3: outbound_bandwidth
+        # Position 4: buffer_size
+        # 
+        # Reality:
+        # Position 0: inbound_bandwidth
+        # Position 1: outbound_bandwidth
+        # Position 2: buffer_size
+        # Position 3: level
+        # Position 4: node_id
+        # 
+        # Level in nodes_info only range from 0 to 3 inclusive, does not contain a node whose level is 4
+        # node_id in nodes_info starts from 0 and to N-1 (N is number of nodes excluding controller)
+        # so nodes_info shouldn't contain the controller
+        #
+        # Also nodes_info is sorted in terms of the position 4 element node_id, in ascending order
+        # 
+        # We have also verified that len(graph) == len(nodes_info) and len(graph[0]) == len(nodes_info)
+        # Therefore we can conclude that graph doesn't contain the controller
+        
+        nodes_info_2 = []
+        for tup in nodes_info:
+            tup2 = (tup[4], tup[3], tup[0], tup[1], tup[2])
+            nodes_info_2.append(tup2)
+        nodes_info_2 = sorted(nodes_info_2, key=lambda x: x[0])
+        self.nodes_info = nodes_info_2
         
         # Newspaper broadcasted by controller and each individual node will update their copy of the newspaper after hearing from controller's news reporting
         self.node_info_update_newspaper = []
-        for i in range(len(graph[0])):
-            new_node = NodePlaceholder(nodes_info[i][0], nodes_info[i][1], nodes_info[i][4], nodes_info[i][2], nodes_info[i][3], 
-                 nodes_info[i][4], nodes_info[i][2], nodes_info[i][3])
+        for tup in self.nodes_info:
+            new_node = NodePlaceholder(node_id=tup[0],
+                                       level=tup[1],
+                                       incoming_bandwidth=tup[2],
+                                       outgoing_bandwidth=tup[3],
+                                       buffer_size=tup[4],
+                                       remaining_inbound=tup[2],
+                                       remaining_outbound=tup[3],
+                                       remaining_buffer=tup[4]
+                                       )
             self.node_info_update_newspaper.append(new_node)
         
         # Your record of the request-messages: a giant library
@@ -236,8 +271,8 @@ class UserSolution(Solution):
         self.new_messages_temporary_storage = []
         # Find reachable (shing's work)
         self.find_reachable = []
-        for i in range(len(graph[0])):
-            find_reachable_object = FindReachable(nodes_info[i][0], nodes_info[i][1], graph, nodes_info)
+        for tup in self.nodes_info:
+            find_reachable_object = FindReachable(tup[0], tup[1], self.graph, self.nodes_info)
             self.find_reachable.append(find_reachable_object)
         
     # Shing's work
