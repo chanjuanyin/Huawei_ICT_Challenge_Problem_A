@@ -658,7 +658,8 @@ class UserSolution(Solution):
                 
         if self.level == 1 or self.level == 2 or self.level == 3:        
             #count for success and fail messages
-            success, fail = 0,0
+            success = 0
+            fail = 0
             for message_result in result:
                 if message_result[1]==True:
                     success+=1
@@ -696,12 +697,12 @@ class UserSolution(Solution):
             """2.1.1 to 2.1.3 the first integer"""
             bin_first_int = bin_tran(switchStatsInfo[integer_index])
             self.remaining_outbound_of_myself -= fail
-            bin_first_int[0:8] = bin_tran(self.node_id)[24:]
-            bin_first_int[8:16] = bin_tran(self.remaining_outbound_of_myself)[24:]
+            bin_first_int = bin_tran(self.node_id)[24:] + bin_first_int[8:] #[0:8]
+            bin_first_int = bin_first_int[0:8] + bin_tran(self.remaining_outbound_of_myself)[24:] + bin_first_int[16:] #[8:16]
             if self.level == 1: #take care of the access level
-                bin_first_int[16:] = bin_tran(self.new_messages_success_added_count)[21:] + "00000"
+                bin_first_int = bin_first_int[0:16] + bin_tran(self.new_messages_success_added_count)[21:] + "00000" #[16:]
             else: #level =2 , 3
-                bin_first_int[16:] = "0" * 16
+                bin_first_int = bin_first_int[0:16] + "0" * 16  #[16:]
             switchStatsInfo[integer_index] = int(bin_first_int , 2)
             integer_index += 1
             """2.2.1 to 2.2.5"""     
@@ -712,10 +713,10 @@ class UserSolution(Solution):
                     # 2.2.1 to 2.2.3
                     integer_value = switchStatsInfo[integer_index]
                     integer_value_bin = bin_tran(integer_value)
-                    integer_value_bin[0:8] = bin_tran(to_node_id)[24:]
-                    integer_value_bin[8:16] = bin_tran(userRequest.target_node_id)[24:]
-                    integer_value_bin[16:29] = bin_tran(request_id)[19:]
-                    integer_value_bin[29:] = "0" * 3
+                    integer_value_bin = bin_tran(to_node_id)[24:] + bin_first_int[8:] #[0:8]
+                    integer_value_bin = bin_first_int[0:8] + bin_tran(userRequest.target_node_id)[24:] + bin_first_int[16:]  #[8:16]
+                    integer_value_bin = integer_value_bin[0:16] + bin_tran(request_id)[19:] + integer_value_bin[29:] #[16:29]
+                    integer_value_bin = integer_value_bin[0:29] + "000"   #[29:]
                     switchStatsInfo[integer_index] = int(integer_value_bin , 2)
                     integer_index += 1
                     # 2.2.4 - 2.2.5
@@ -723,8 +724,8 @@ class UserSolution(Solution):
                     # the first 2.2.4
                     integer_value = switchStatsInfo[integer_index]
                     integer_value_bin = bin_tran(integer_value)
-                    integer_value_bin[0:8] = bin_tran(userRequest.request_begin_time)[24:]
-                    integer_value_bin[8:15] = "0000000"
+                    integer_value_bin = bin_tran(userRequest.request_begin_time)[24:] + integer_value_bin[8:] #[0:8]
+                    integer_value_bin = integer_value_bin[0:8] + "0000000" + integer_value_bin[15:] #[8:15]
                     # the first 2.2.5 * 1
                     minor_id_range_list = get_minor_id_range_list(userRequest) # It is a list of list, every list inside will be minor id to minor id for one request
                     first_range = minor_id_range_list[0]
@@ -732,11 +733,11 @@ class UserSolution(Solution):
                     first_range_end = first_range[1]
                     first_range_start_bit = bin_tran(first_range_start)
                     first_range_end_bit = bin_tran(first_range_end)
-                    integer_value_bin[15:29] = first_range_start_bit[25:] + first_range_end_bit[25:]
+                    integer_value_bin = integer_value_bin[0:15] + first_range_start_bit[25:] + first_range_end_bit[25:] + integer_value_bin[29:] #[15:29]
                     if len(minor_id_range_list) > 1:
-                        integer_value_bin[29:] = "100"
+                        integer_value_bin = integer_value_bin[0:29] + "100"  #[29:]
                     else:
-                        integer_value_bin[29:] = "000"
+                        integer_value_bin = integer_value_bin[0:29] + "000" #[29:]
                     minor_id_range_list.pop(0)
                     switchStatsInfo[integer_index] = int(integer_value_bin , 2)
                     integer_index += 1
@@ -746,7 +747,7 @@ class UserSolution(Solution):
                     integer_value_bin = bin_tran(integer_value)
                     for Range in minor_id_range_list: #Range is a list that have 2 element as i mentioned above
                         if count_range == 2:
-                            switchStatsInfo[integer_index] = int(integer_value_bin + "00" , 2)
+                            switchStatsInfo[integer_index] = int(integer_value_bin[0:30] + "00" , 2)
                             integer_index += 1
                             integer_value = switchStatsInfo[integer_index]
                             integer_value_bin = bin_tran(integer_value)
@@ -757,25 +758,36 @@ class UserSolution(Solution):
                         #combine range is a 14 binary bit
                         combine_range = start_range_bit[25:] + end_range_bit[25:]
                         if minor_id_range_list[-1] == Range: # if there is no more Range
-                            integer_value_bin[0 + count_range*15 : 15 + count_range*15] = combine_range + "0"
                             if count_range == 0:
-                                integer_value_bin[15:] = "0" * 17
+                                integer_value_bin = combine_range + "0" + integer_value_bin[15:] #[0:15]
+                                integer_value_bin = integer_value_bin[0:15] + "0" * 17 # [15:]
                                 switchStatsInfo[integer_index] = int(integer_value_bin , 2)
                                 integer_index += 1
-                            else:
-                                switchStatsInfo[integer_index] = int(integer_value_bin + "00" , 2)
+                            elif count_range == 1:
+                                integer_value_bin = integer_value_bin[0:15] + combine_range + "0" + "00"   #[15:]
+                                switchStatsInfo[integer_index] = int(integer_value_bin, 2)
                                 integer_index += 1
+                            # if count_range == 0:
+                                # integer_value_bin[15:] = "0" * 17
+                                # switchStatsInfo[integer_index] = int(integer_value_bin , 2)
+                                # integer_index += 1
+                            # else:
+                                # switchStatsInfo[integer_index] = int(integer_value_bin + "00" , 2)
+                                # integer_index += 1
                         else:
-                            integer_value_bin[0 + count_range*15 : 15 + count_range*15] = combine_range + "1"
+                            if count_range ==0 :
+                                integer_value_bin = combine_range + "1" + integer_value_bin[15:] #[0:15]
+                            elif count_range == 1:
+                                integer_value_bin = integer_value_bin[0:15] + combine_range + "1" + integer_value_bin[30:] #[15:30]
                         count_range += 1
                     
             for to_node_id, number_of_failure in fail_dict.items(): # add into your swtichStatsInfo to mention your failure
                 integer_value = switchStatsInfo[integer_index]
                 integer_value_bin = bin_tran(integer_value)
-                integer_value_bin[0:8] = bin_tran(to_node_id)[24:]
-                integer_value_bin[8:16] = bin_tran(255)[24:]
-                integer_value_bin[16:24] = bin_tran(number_of_failure)[24:]
-                integer_value_bin[24:] = "0" * 8
+                integer_value_bin = bin_tran(to_node_id)[24:] + integer_value_bin[8:] #[0:8]
+                integer_value_bin = integer_value_bin[0:8] + bin_tran(255)[24:] + integer_value_bin[16:] #[8:16]
+                integer_value_bin = integer_value_bin[0:16] + bin_tran(number_of_failure)[24:] + integer_value_bin[24:] #[16:24]
+                integer_value_bin = integer_value_bin[0:24] + "0" * 8 #[24:]
                 switchStatsInfo[integer_index] = int(integer_value_bin , 2)
                 integer_index += 1
                 
@@ -783,7 +795,7 @@ class UserSolution(Solution):
                 integer_index = rest_integer_index
                 integer_value = switchStatsInfo[integer_index]
                 integer_value_bin = bin_tran(integer_value)
-                integer_value_bin[:] = bin_tran(255)[24:] * 4
+                integer_value_bin = bin_tran(255)[24:] * 4 #[:]
                 switchStatsInfo[integer_index] = int(integer_value_bin , 2)
                 
         elif self.level == 4:
@@ -792,17 +804,17 @@ class UserSolution(Solution):
             integer_index = 0
             integer_value = switchStatsInfo[integer_index]
             integer_value_bin = bin_tran(integer_value)
-            integer_value_bin[0:8] = bin_tran(255)[24:]
-            integer_value_bin[24:] = "0" * 24
+            integer_value_bin = bin_tran(255)[24:] + integer_value_bin[8:] #[0:8]
+            integer_value_bin = integer_value_bin[0:8] + "0" * 24 #[8:]
             switchStatsInfo[integer_index] = int(integer_value_bin , 2)
             integer_index += 1
             for node in self.node_info_update_newspaper:
                 integer_value = switchStatsInfo[integer_index]
                 integer_value_bin = bin_tran(integer_value)
-                integer_value_bin[0:11] = bin_tran(node.remaining_buffer)[21:]
-                integer_value_bin[11:21] = bin_tran(node.remaining_inbound)[22:]
-                integer_value_bin[21:29] = bin_tran(node.remaining_outbound)[24:]
-                integer_value_bin[29:] = "0" * 3
+                integer_value_bin = bin_tran(node.remaining_buffer)[21:] + integer_value_bin[11:] # [0:11]
+                integer_value_bin = bin_first_int[0:11] + bin_tran(node.remaining_inbound)[22:] + integer_value_bin[21:] #[11:21]
+                integer_value_bin = integer_value_bin[0:21] + bin_tran(node.remaining_outbound)[24:] + integer_value_bin[29:] #[21:29]
+                integer_value_bin = integer_value_bin[0:29] + "0" * 3 #[29:]
                 switchStatsInfo[integer_index] = int(integer_value_bin , 2)
                 integer_index += 1
                  
@@ -811,8 +823,8 @@ class UserSolution(Solution):
             integer_index = 0
             integer_value = switchStatsInfo[integer_index]
             integer_value_bin = bin_tran(integer_value)
-            integer_value_bin[0:8] = bin_tran(254)[24:]
-            integer_value_bin[8:] = "0" * 24
+            integer_value_bin = bin_tran(254)[24:] + integer_value_bin[8:] #[0:8]
+            integer_value_bin = integer_value_bin[0:8] + "0" * 24 #[8:]
             switchStatsInfo[integer_index] = int(integer_value_bin , 2)
             integer_index += 1
             
