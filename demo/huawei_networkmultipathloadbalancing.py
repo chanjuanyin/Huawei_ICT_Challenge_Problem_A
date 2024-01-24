@@ -463,7 +463,7 @@ class UserSolution(Solution):
         message_to_send = []
         remaining_messages_I_can_send = self.remaining_outbound_of_myself
         if self.level == 1:
-            send_to_level_2_buffer_cap = 0.6                                    # Feel free to adjust
+            send_to_level_2_buffer_cap = 0.6                                    # Feel free to adjusta
             send_to_level_2_inbound_bandwidth_cap = 0.8                         # Feel free to adjust
             priority_1_list = [] # From level 1 directly to level 0
             priority_2_list = [] # From level 1 to level 2 then can reach back level 1 and level 0
@@ -518,7 +518,7 @@ class UserSolution(Solution):
                         # No need to allocate
                         my_level_2_recipients_how_much_I_allocate = my_level_2_recipients_how_much_they_can_eat
                     else: #my_level_2_recipients_how_much_they_can_eat_in_total > how_much_I_can_send
-                        # Need to allocate, very mafan one
+                        # Need to allocate, very mafan one , yes I agree 
                         # Allocate according to the ratio of how much they can eat
                         # Beause you want to spread out to more level 2 nodes
                         my_level_2_recipients_how_much_I_allocate = {}
@@ -785,7 +785,7 @@ class UserSolution(Solution):
                 integer_value_bin = bin_tran(integer_value)
                 integer_value_bin[:] = bin_tran(255)[24:] * 4
                 switchStatsInfo[integer_index] = int(integer_value_bin , 2)
-
+                
         elif self.level == 4:
             """Define and update controller SwtichStatsInfo"""
             switchStatsInfo = [0 for i in range(256)]
@@ -805,7 +805,7 @@ class UserSolution(Solution):
                 integer_value_bin[29:] = "0" * 3
                 switchStatsInfo[integer_index] = int(integer_value_bin , 2)
                 integer_index += 1
-                
+                 
         else: #level ==0
             switchStatsInfo = [0 for i in range(256)]
             integer_index = 0
