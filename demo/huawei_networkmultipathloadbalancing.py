@@ -468,7 +468,7 @@ class UserSolution(Solution):
             priority_1_list = [] # From level 1 directly to level 0
             priority_2_list = [] # From level 1 to level 2 then can reach back level 1 and level 0
             priority_3_list = [] # From level 1 to level 2 then level 3, then back to level 2 and back to level 1, and finally reach level 0
-            for request_id, user_request_object in self.requests_messages_you_possess:
+            for request_id, user_request_object in self.requests_messages_you_possess.items():
                 if user_request_object.target_node_id in self.find_reachable[self.node_id].level_0_reachable:
                     priority_1_list.append((request_id, user_request_object.request_begin_time))
                 else:
@@ -511,7 +511,7 @@ class UserSolution(Solution):
                         how_much_one_can_eat = max(how_much_one_can_eat, 0) # prevent it from going negative
                         my_level_2_recipients_how_much_they_can_eat[level_2_node] = how_much_one_can_eat
                     my_level_2_recipients_how_much_they_can_eat_in_total = 0
-                    for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat:
+                    for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat.items():
                         my_level_2_recipients_how_much_they_can_eat_in_total += how_much_one_can_eat
                     if my_level_2_recipients_how_much_they_can_eat_in_total <= how_much_I_can_send:
                         # I can send more than they can eat, so the number I will send is exactly how much each of them can eat
@@ -523,7 +523,7 @@ class UserSolution(Solution):
                         # Beause you want to spread out to more level 2 nodes
                         my_level_2_recipients_how_much_I_allocate = {}
                         my_level_2_recipients_how_much_I_allocate_in_total = 0
-                        for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat:
+                        for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat.items():
                             how_much_I_allocate = int( (my_level_2_recipients_how_much_they_can_eat[level_2_node] / my_level_2_recipients_how_much_they_can_eat_in_total) * how_much_I_can_send )
                             my_level_2_recipients_how_much_I_allocate[level_2_node] = how_much_I_allocate
                             my_level_2_recipients_how_much_I_allocate_in_total += how_much_I_allocate
@@ -531,7 +531,7 @@ class UserSolution(Solution):
                         # Due to existence of some remainders due to rounding down / rounding up
                         while my_level_2_recipients_how_much_I_allocate_in_total < how_much_I_can_send: # Some remainders due to rounding down / rounding up
                             # Just randomly allocate to the level_2_nodes
-                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate:
+                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate.items():
                                 if my_level_2_recipients_how_much_I_allocate_in_total < how_much_I_can_send: # Some remainder due to rounding down / rounding up
                                     my_level_2_recipients_how_much_I_allocate[level_2_node] += 1
                                     my_level_2_recipients_how_much_I_allocate_in_total += 1
@@ -539,7 +539,7 @@ class UserSolution(Solution):
                                     break
                         while my_level_2_recipients_how_much_I_allocate_in_total > how_much_I_can_send: # Some remainders due to rounding down / rounding up
                             # Just randomly allocate to the level_2_nodes
-                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate:
+                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate.items():
                                 if my_level_2_recipients_how_much_I_allocate_in_total > how_much_I_can_send: # Some remainders due to rounding down / rounding up
                                     my_level_2_recipients_how_much_I_allocate[level_2_node] -= 1
                                     my_level_2_recipients_how_much_I_allocate_in_total -= 1
@@ -549,7 +549,7 @@ class UserSolution(Solution):
                     # Also how much I allocate in total is guaranteed to be <= how_much_I_can_send
                     # So now I will send messages (means now I will put messages into message_to_send list)
                     index = 0
-                    for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate:
+                    for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate.items():
                         while how_much_I_allocate > 0:
                             message = Message(self.node_id, level_2_node, user_request_object.target_node_id, 
                                                 user_request_object.request_id, user_request_object.message_id[index], user_request_object.request_begin_time)
@@ -579,7 +579,7 @@ class UserSolution(Solution):
                         how_much_one_can_eat = max(how_much_one_can_eat, 0) # prevent it from going negative
                         my_level_2_recipients_how_much_they_can_eat[level_2_node] = how_much_one_can_eat
                     my_level_2_recipients_how_much_they_can_eat_in_total = 0
-                    for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat:
+                    for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat.items():
                         my_level_2_recipients_how_much_they_can_eat_in_total += how_much_one_can_eat
                     if my_level_2_recipients_how_much_they_can_eat_in_total <= how_much_I_can_send:
                         # I can send more than they can eat, so the number I will send is exactly how much each of them can eat
@@ -591,7 +591,7 @@ class UserSolution(Solution):
                         # Beause you want to spread out to more level 2 nodes
                         my_level_2_recipients_how_much_I_allocate = {}
                         my_level_2_recipients_how_much_I_allocate_in_total = 0
-                        for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat:
+                        for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat.items():
                             how_much_I_allocate = int( (my_level_2_recipients_how_much_they_can_eat[level_2_node] / my_level_2_recipients_how_much_they_can_eat_in_total) * how_much_I_can_send )
                             my_level_2_recipients_how_much_I_allocate[level_2_node] = how_much_I_allocate
                             my_level_2_recipients_how_much_I_allocate_in_total += how_much_I_allocate
@@ -599,7 +599,7 @@ class UserSolution(Solution):
                         # Due to existence of some remainders due to rounding down / rounding up
                         while my_level_2_recipients_how_much_I_allocate_in_total < how_much_I_can_send: # Some remainders due to rounding down / rounding up
                             # Just randomly allocate to the level_2_nodes
-                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate:
+                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate.items():
                                 if my_level_2_recipients_how_much_I_allocate_in_total < how_much_I_can_send: # Some remainder due to rounding down / rounding up
                                     my_level_2_recipients_how_much_I_allocate[level_2_node] += 1
                                     my_level_2_recipients_how_much_I_allocate_in_total += 1
@@ -607,7 +607,7 @@ class UserSolution(Solution):
                                     break
                         while my_level_2_recipients_how_much_I_allocate_in_total > how_much_I_can_send: # Some remainders due to rounding down / rounding up
                             # Just randomly allocate to the level_2_nodes
-                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate:
+                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate.items():
                                 if my_level_2_recipients_how_much_I_allocate_in_total > how_much_I_can_send: # Some remainders due to rounding down / rounding up
                                     my_level_2_recipients_how_much_I_allocate[level_2_node] -= 1
                                     my_level_2_recipients_how_much_I_allocate_in_total -= 1
@@ -617,7 +617,7 @@ class UserSolution(Solution):
                     # Also how much I allocate in total is guaranteed to be <= how_much_I_can_send
                     # So now I will send messages (means now I will put messages into message_to_send list)
                     index = 0
-                    for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate:
+                    for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate.items():
                         while how_much_I_allocate > 0:
                             message = Message(self.node_id, level_2_node, user_request_object.target_node_id, 
                                                 user_request_object.request_id, user_request_object.message_id[index], user_request_object.request_begin_time)
