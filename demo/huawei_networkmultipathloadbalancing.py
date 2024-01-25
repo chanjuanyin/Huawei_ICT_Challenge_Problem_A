@@ -6,10 +6,10 @@ from solution_common.solution import Solution
 #this class serves for the node information 101 for each node
 class NodePlaceholder:
 
-    def __init__(self, id, level,buffer_size, incoming_bandwidth, outgoing_bandwidth, 
+    def __init__(self, node_id, level, buffer_size, incoming_bandwidth, outgoing_bandwidth, 
                  remaining_buffer, remaining_inbound, remaining_outbound):
         # Instance attributes
-        self.id = id
+        self.node_id = node_id
         self.level=level
         self.buffer_size = buffer_size
         self.incoming_bandwidth = incoming_bandwidth
@@ -214,16 +214,51 @@ class UserSolution(Solution):
     def __init__(self, node_id: int, bw_in: int, bw_out: int, size: int, level: int, graph: List[List[int]],
                  nodes_info: List[Tuple[int, int, int, int, int]]):
         super().__init__(node_id, bw_in, bw_out, size, level, graph, nodes_info)
-        nodes_info = sorted(nodes_info, key=lambda x: x[0])
         
-        if nodes_info[0][0]==-1:
-            nodes_info = nodes_info[1:]
+        # nodes_info: List[Tuple[int, int, int, level, node_id]]
+        # 
+        # Our original thinking (also this is the ordering of our self-defined self.nodes_info):
+        # Position 0: node_id
+        # Position 1: level
+        # Position 2: inbound_bandwidth
+        # Position 3: outbound_bandwidth
+        # Position 4: buffer_size
+        # 
+        # Reality:
+        # Position 0: inbound_bandwidth
+        # Position 1: outbound_bandwidth
+        # Position 2: buffer_size
+        # Position 3: level
+        # Position 4: node_id
+        # 
+        # Level in nodes_info only range from 0 to 3 inclusive, does not contain a node whose level is 4
+        # node_id in nodes_info starts from 0 and to N-1 (N is number of nodes excluding controller)
+        # so nodes_info shouldn't contain the controller
+        #
+        # Also nodes_info is sorted in terms of the position 4 element node_id, in ascending order
+        # 
+        # We have also verified that len(graph) == len(nodes_info) and len(graph[0]) == len(nodes_info)
+        # Therefore we can conclude that graph doesn't contain the controller
+        
+        nodes_info_2 = []
+        for tup in nodes_info:
+            tup2 = (tup[4], tup[3], tup[0], tup[1], tup[2])
+            nodes_info_2.append(tup2)
+        nodes_info_2 = sorted(nodes_info_2, key=lambda x: x[0])
+        self.nodes_info = nodes_info_2
         
         # Newspaper broadcasted by controller and each individual node will update their copy of the newspaper after hearing from controller's news reporting
         self.node_info_update_newspaper = []
-        for i in range(len(graph[0])):
-            new_node = NodePlaceholder(nodes_info[i][0], nodes_info[i][1], nodes_info[i][4], nodes_info[i][2], nodes_info[i][3], 
-                 nodes_info[i][4], nodes_info[i][2], nodes_info[i][3])
+        for tup in self.nodes_info:
+            new_node = NodePlaceholder(node_id=tup[0],
+                                       level=tup[1],
+                                       incoming_bandwidth=tup[2],
+                                       outgoing_bandwidth=tup[3],
+                                       buffer_size=tup[4],
+                                       remaining_inbound=tup[2],
+                                       remaining_outbound=tup[3],
+                                       remaining_buffer=tup[4]
+                                       )
             self.node_info_update_newspaper.append(new_node)
         
         # Your record of the request-messages: a giant library
@@ -236,15 +271,15 @@ class UserSolution(Solution):
         self.new_messages_temporary_storage = []
         # Find reachable (shing's work)
         self.find_reachable = []
-        for i in range(len(graph[0])):
-            find_reachable_object = FindReachable(nodes_info[i][0], nodes_info[i][1], graph, nodes_info)
+        for tup in self.nodes_info:
+            find_reachable_object = FindReachable(tup[0], tup[1], self.graph, self.nodes_info)
             self.find_reachable.append(find_reachable_object)
         
     # Shing's work
     # the access node will receive request and divide into messages   
     def add_request_list(self, request_list: List[Request]) -> None:
         for new_request in request_list:
-            user_request_object = UserRequest(new_request.request_id, new_request.target_node_id, new_request.request_begin_time)
+            user_request_object = UserRequest(new_request.request_id, new_request.target_node_id, new_request.begin_time)
             user_request_object.message_id = [i for i in range(new_request.data_size)]
             self.new_messages_temporary_storage.append(user_request_object)
             
@@ -270,20 +305,22 @@ class UserSolution(Solution):
     #4. Controller updates its own newspaper, such as buffer size 
     #5. Normal nodes will updates its own SwitchStatInfo
     def ask_round_solution(self, neighbor_info_list: List[SwitchStatsInfo]) -> List[Message]:
+        def bin_tran(num):
+            return format(num, '032b')
         # If you are level 1, 2, 3
         if self.level == 1 or self.level == 2 or self.level == 3:
             for switchStatsInfo in neighbor_info_list:
                 if len(switchStatsInfo.info) == 0:
                     continue
                 
-                sender_node_id = (switchStatsInfo.info[0] & 0xFF000000) >> 24
+                sender_node_id = int(bin_tran(switchStatsInfo.info[0])[1:9],2)  # 0xFF000000>>1 ; >>23
                 
                 # A normal node receiving news reporting from the controller
                 if sender_node_id == 255:
                     for node_id, node_news_update_int in enumerate(switchStatsInfo.info[1:len(self.graph[0])+1]):
-                        remaining_buffer = ( node_news_update_int & 0xFFE00000) >> 21
-                        remaining_inbound = ( node_news_update_int & 0x1FF800) >> 11
-                        remaining_outbound = ( node_news_update_int & 0x7F8) >> 3
+                        remaining_buffer = int( bin_tran(node_news_update_int)[1:12] , 2)   #(0xFFE00000>>1)) >> 20 
+                        remaining_inbound = int( bin_tran(node_news_update_int)[1:22],2)  #(0x1FF800>>1)) >> 10
+                        remaining_outbound = int( bin_tran(node_news_update_int)[1:30] ,2)   # (0x7F8>>1)) >> 2
                         self.node_info_update_newspaper[node_id].remaining_buffer = remaining_buffer
                         self.node_info_update_newspaper[node_id].remaining_inbound = remaining_inbound
                         self.node_info_update_newspaper[node_id].remaining_outbound = remaining_outbound
@@ -299,37 +336,37 @@ class UserSolution(Solution):
                     integer_to_read_index = 1
                     while continue_read:
                         integer_to_read = switchStatsInfo.info[integer_to_read_index]
-                        request_message_recipient = ( integer_to_read & 0xFF000000) >> 24
+                        request_message_recipient = int( bin_tran(integer_to_read)[1:9],2)  #(0xFF000000>>1)) >> 23
                         if request_message_recipient == 255:
                             continue_read = False
                             break
-                        target_node_id = ( integer_to_read & 0x00FF0000) >> 16
+                        target_node_id = int( bin_tran(integer_to_read)[1:17],2)   #(0x00FF0000>>1)) >> 15
                         if target_node_id == 255:
                             integer_to_read_index += 1
                             continue
                         else:
-                            request_id = ( integer_to_read & 0x0000FFF8) >> 3
-                            request_begin_time = ( switchStatsInfo.info[integer_to_read_index+1] & 0xFF000000) >> 24
+                            request_id = int( bin_tran(integer_to_read)[1:30],2) #0x0000FFF8>>1)) >> 2
+                            request_begin_time = int( bin_tran(switchStatsInfo.info[integer_to_read_index+1])[1:9] ,2) #(0xFF000000>>1)) >> 23
                             new_user_request = UserRequest(request_id, target_node_id, request_begin_time)
                             integer_to_read_index += 1
-                            message_from = ( switchStatsInfo.info[integer_to_read_index] & 0x1FC00) >> 10
-                            message_to = ( switchStatsInfo.info[integer_to_read_index] & 0x3F8) >> 3
+                            message_from = int( bin_tran(switchStatsInfo.info[integer_to_read_index])[1:23],2)  #(0x1FC00>>1)) >> 9
+                            message_to = int( bin_tran(switchStatsInfo.info[integer_to_read_index])[1:30],2)   #(0x3F8>>1)) >> 2
                             new_user_request.insert_message(list(range(message_from, message_to)))
-                            continue_read_2 = ( switchStatsInfo.info[integer_to_read_index] & 0x4) >> 2
+                            continue_read_2 = int( bin_tran(switchStatsInfo.info[integer_to_read_index])[1:31],2)   #(0x4>>1)) >> 1
                             integer_to_read_index += 1
                             while continue_read_2:
-                                message_from = ( switchStatsInfo.info[integer_to_read_index] & 0xFE000000) >> 25
-                                message_to = ( switchStatsInfo.info[integer_to_read_index] & 0x1FC0000) >> 18
+                                message_from = int( bin_tran(switchStatsInfo.info[integer_to_read_index])[1:8],2) #(0xFE000000>>1)) >> 24
+                                message_to = int(bin_tran(switchStatsInfo.info[integer_to_read_index])[1:15],2)  #(0x1FC0000>>1)) >> 17
                                 new_user_request.insert_message(list(range(message_from, message_to)))
-                                continue_read_2 = ( switchStatsInfo.info[integer_to_read_index] & 0x20000) >> 17
+                                continue_read_2 = int(bin_tran(switchStatsInfo.info[integer_to_read_index])[1:16],2)  #(0x20000>>1)) >> 16
                                 if continue_read_2==0:
                                     integer_to_read_index += 1
                                     continue
                                 else:
-                                    message_from = ( switchStatsInfo.info[integer_to_read_index] & 0x1FC00) >> 10
-                                    message_to = ( switchStatsInfo.info[integer_to_read_index] & 0x3F8) >> 3
+                                    message_from = int(bin_tran(switchStatsInfo.info[integer_to_read_index])[1:23] ,2) #(0x1FC00>>1)) >> 9
+                                    message_to = int(bin_tran(switchStatsInfo.info[integer_to_read_index])[1:30] , 2) # (0x3F8>>1)) >> 2
                                     new_user_request.insert_message(list(range(message_from, message_to)))
-                                    continue_read_2 = ( switchStatsInfo.info[integer_to_read_index] & 0x4) >> 2
+                                    continue_read_2 = int(bin_tran(switchStatsInfo.info[integer_to_read_index])[1:31],2)  # & (0x4>>1)) >> 1
                                     integer_to_read_index += 1
                             if request_message_recipient == self.node_id:
                                 if new_user_request.request_id not in self.requests_messages_you_possess:
@@ -356,12 +393,14 @@ class UserSolution(Solution):
             node_info_successfully_received = [0 for i in range(len(self.graph[0]))]
             node_info_failed_to_receive = [0 for i in range(len(self.graph[0]))]
             for switchStatsInfo in neighbor_info_list:
-                sender_node_id = (switchStatsInfo.info[0] & 0xFF000000) >> 24
+                if len(switchStatsInfo.info) == 0:
+                    continue
+                sender_node_id = int(bin_tran(switchStatsInfo.info[0])[1:9],2)  #(0xFF000000>>1)) >> 23
                 if sender_node_id == 254:
                     continue
-                sender_remaining_outbound = (switchStatsInfo.info[0] & 0x00FF0000) >> 16
+                sender_remaining_outbound = int(bin_tran(switchStatsInfo.info[0])[1:17],2) #(0x00FF0000>>1)) >> 15
                 self.node_info_update_newspaper[sender_node_id].remaining_outbound = sender_remaining_outbound
-                sender_received_new_requests = (switchStatsInfo.info[0] & 0xFFE0) >> 5
+                sender_received_new_requests = int(bin_tran(switchStatsInfo.info[0])[1:28],2)  #(0xFFE0>>1)) >> 4
                 self.node_info_update_newspaper[sender_node_id].remaining_buffer -= sender_received_new_requests
                 
                 # Let me think
@@ -369,39 +408,39 @@ class UserSolution(Solution):
                 integer_to_read_index = 1
                 while continue_read:
                     integer_to_read = switchStatsInfo.info[integer_to_read_index]
-                    request_message_recipient = ( integer_to_read & 0xFF000000) >> 24
+                    request_message_recipient = int(bin_tran(integer_to_read)[1:9],2)  #(0xFF000000>>1)) >> 23
                     if request_message_recipient == 255:
                         continue_read = False
                         break
-                    target_node_id = ( integer_to_read & 0x00FF0000) >> 16
+                    target_node_id = int(bin_tran(integer_to_read)[1:17],2)  #0x00FF0000>>1)) >> 15
                     if target_node_id == 255:
-                        how_many_failed = ( integer_to_read & 0x0000FF00) >> 8
+                        how_many_failed = int(bin_tran(integer_to_read)[1:25],2)  #(0x0000FF00>>1)) >> 7
                         node_info_failed_to_receive[request_message_recipient] += how_many_failed
                         integer_to_read_index += 1
                         continue
                     else:
-                        request_id = ( integer_to_read & 0x0000FFF8) >> 3
-                        request_begin_time = ( switchStatsInfo.info[integer_to_read_index+1] & 0xFF000000) >> 24
+                        request_id = int(bin_tran(integer_to_read)[1:30],2)  #(0x0000FFF8)>>1) >> 2 
+                        request_begin_time = int(bin_tran(switchStatsInfo.info[integer_to_read_index+1])[1:9],2)  #(0xFF000000>>1)) >> 23
                         new_user_request = UserRequest(request_id, target_node_id, request_begin_time)
                         integer_to_read_index += 1
-                        message_from = ( switchStatsInfo.info[integer_to_read_index] & 0x1FC00) >> 10
-                        message_to = ( switchStatsInfo.info[integer_to_read_index] & 0x3F8) >> 3
+                        message_from = int(bin_tran(switchStatsInfo.info[integer_to_read_index])[1:23],2)  #(0x1FC00>>1)) >> 9
+                        message_to = int(bin_tran(switchStatsInfo.info[integer_to_read_index])[1:30],2)  #(0x3F8>>1)) >> 2
                         new_user_request.insert_message(list(range(message_from, message_to)))
-                        continue_read_2 = ( switchStatsInfo.info[integer_to_read_index] & 0x4) >> 2
+                        continue_read_2 = int(bin_tran(switchStatsInfo.info[integer_to_read_index])[1:31],2) #(0x4>>1)) >> 1
                         integer_to_read_index += 1
                         while continue_read_2:
-                            message_from = ( switchStatsInfo.info[integer_to_read_index] & 0xFE000000) >> 25
-                            message_to = ( switchStatsInfo.info[integer_to_read_index] & 0x1FC0000) >> 18
+                            message_from = int(bin_tran(switchStatsInfo.info[integer_to_read_index])[1:8],2) #(0xFE000000>>1)) >> 24
+                            message_to = int(bin_tran(switchStatsInfo.info[integer_to_read_index])[1:15],2) #(0x1FC0000>>1)) >> 17
                             new_user_request.insert_message(list(range(message_from, message_to)))
-                            continue_read_2 = ( switchStatsInfo.info[integer_to_read_index] & 0x20000) >> 17
+                            continue_read_2 = int(bin_tran(switchStatsInfo.info[integer_to_read_index])[1:16],2)   #(0x20000>>1)) >> 16
                             if continue_read_2==0:
                                 integer_to_read_index += 1
                                 continue
                             else:
-                                message_from = ( switchStatsInfo.info[integer_to_read_index] & 0x1FC00) >> 10
-                                message_to = ( switchStatsInfo.info[integer_to_read_index] & 0x3F8) >> 3
+                                message_from = int(bin_tran(switchStatsInfo.info[integer_to_read_index])[1:23],2) #(0x1FC00>>1)) >> 9
+                                message_to = int(bin_tran(switchStatsInfo.info[integer_to_read_index])[1:30],2) #(0x3F8>>1)) >> 2
                                 new_user_request.insert_message(list(range(message_from, message_to)))
-                                continue_read_2 = ( switchStatsInfo.info[integer_to_read_index] & 0x4) >> 2
+                                continue_read_2 = int(bin_tran(switchStatsInfo.info[integer_to_read_index])[1:31],2)  #(0x4>>1)) >> 1
                                 integer_to_read_index += 1
                         self.node_info_update_newspaper[sender_node_id].remaining_buffer += len(new_user_request.message_id)
                         self.node_info_update_newspaper[request_message_recipient].remaining_buffer -= len(new_user_request.message_id)
@@ -426,12 +465,12 @@ class UserSolution(Solution):
         message_to_send = []
         remaining_messages_I_can_send = self.remaining_outbound_of_myself
         if self.level == 1:
-            send_to_level_2_buffer_cap = 0.6                                    # Feel free to adjust
+            send_to_level_2_buffer_cap = 0.6                                    # Feel free to adjusta
             send_to_level_2_inbound_bandwidth_cap = 0.8                         # Feel free to adjust
             priority_1_list = [] # From level 1 directly to level 0
             priority_2_list = [] # From level 1 to level 2 then can reach back level 1 and level 0
             priority_3_list = [] # From level 1 to level 2 then level 3, then back to level 2 and back to level 1, and finally reach level 0
-            for request_id, user_request_object in self.requests_messages_you_possess:
+            for request_id, user_request_object in self.requests_messages_you_possess.items():
                 if user_request_object.target_node_id in self.find_reachable[self.node_id].level_0_reachable:
                     priority_1_list.append((request_id, user_request_object.request_begin_time))
                 else:
@@ -445,8 +484,8 @@ class UserSolution(Solution):
                     else:
                         priority_3_list.append((request_id, user_request_object.request_begin_time))
             priority_1_list = sorted(priority_1_list, key=lambda x: x[1]) # Sort by request_begin_time because we need to take care of the latency which is part of the scoring
-            priority_2_list = sorted(priority_1_list, key=lambda x: x[1]) # Sort by request_begin_time because we need to take care of the latency which is part of the scoring
-            priority_3_list = sorted(priority_1_list, key=lambda x: x[1]) # Sort by request_begin_time because we need to take care of the latency which is part of the scoring
+            priority_2_list = sorted(priority_2_list, key=lambda x: x[1]) # Sort by request_begin_time because we need to take care of the latency which is part of the scoring
+            priority_3_list = sorted(priority_3_list, key=lambda x: x[1]) # Sort by request_begin_time because we need to take care of the latency which is part of the scoring
             
             for tup in priority_1_list: # tup means tuple
                 if remaining_messages_I_can_send > 0:
@@ -474,19 +513,19 @@ class UserSolution(Solution):
                         how_much_one_can_eat = max(how_much_one_can_eat, 0) # prevent it from going negative
                         my_level_2_recipients_how_much_they_can_eat[level_2_node] = how_much_one_can_eat
                     my_level_2_recipients_how_much_they_can_eat_in_total = 0
-                    for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat:
+                    for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat.items():
                         my_level_2_recipients_how_much_they_can_eat_in_total += how_much_one_can_eat
                     if my_level_2_recipients_how_much_they_can_eat_in_total <= how_much_I_can_send:
                         # I can send more than they can eat, so the number I will send is exactly how much each of them can eat
                         # No need to allocate
                         my_level_2_recipients_how_much_I_allocate = my_level_2_recipients_how_much_they_can_eat
                     else: #my_level_2_recipients_how_much_they_can_eat_in_total > how_much_I_can_send
-                        # Need to allocate, very mafan one
+                        # Need to allocate, very mafan one , yes I agree 
                         # Allocate according to the ratio of how much they can eat
                         # Beause you want to spread out to more level 2 nodes
                         my_level_2_recipients_how_much_I_allocate = {}
                         my_level_2_recipients_how_much_I_allocate_in_total = 0
-                        for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat:
+                        for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat.items():
                             how_much_I_allocate = int( (my_level_2_recipients_how_much_they_can_eat[level_2_node] / my_level_2_recipients_how_much_they_can_eat_in_total) * how_much_I_can_send )
                             my_level_2_recipients_how_much_I_allocate[level_2_node] = how_much_I_allocate
                             my_level_2_recipients_how_much_I_allocate_in_total += how_much_I_allocate
@@ -494,7 +533,7 @@ class UserSolution(Solution):
                         # Due to existence of some remainders due to rounding down / rounding up
                         while my_level_2_recipients_how_much_I_allocate_in_total < how_much_I_can_send: # Some remainders due to rounding down / rounding up
                             # Just randomly allocate to the level_2_nodes
-                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate:
+                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate.items():
                                 if my_level_2_recipients_how_much_I_allocate_in_total < how_much_I_can_send: # Some remainder due to rounding down / rounding up
                                     my_level_2_recipients_how_much_I_allocate[level_2_node] += 1
                                     my_level_2_recipients_how_much_I_allocate_in_total += 1
@@ -502,7 +541,7 @@ class UserSolution(Solution):
                                     break
                         while my_level_2_recipients_how_much_I_allocate_in_total > how_much_I_can_send: # Some remainders due to rounding down / rounding up
                             # Just randomly allocate to the level_2_nodes
-                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate:
+                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate.items():
                                 if my_level_2_recipients_how_much_I_allocate_in_total > how_much_I_can_send: # Some remainders due to rounding down / rounding up
                                     my_level_2_recipients_how_much_I_allocate[level_2_node] -= 1
                                     my_level_2_recipients_how_much_I_allocate_in_total -= 1
@@ -512,7 +551,7 @@ class UserSolution(Solution):
                     # Also how much I allocate in total is guaranteed to be <= how_much_I_can_send
                     # So now I will send messages (means now I will put messages into message_to_send list)
                     index = 0
-                    for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate:
+                    for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate.items():
                         while how_much_I_allocate > 0:
                             message = Message(self.node_id, level_2_node, user_request_object.target_node_id, 
                                                 user_request_object.request_id, user_request_object.message_id[index], user_request_object.request_begin_time)
@@ -542,7 +581,7 @@ class UserSolution(Solution):
                         how_much_one_can_eat = max(how_much_one_can_eat, 0) # prevent it from going negative
                         my_level_2_recipients_how_much_they_can_eat[level_2_node] = how_much_one_can_eat
                     my_level_2_recipients_how_much_they_can_eat_in_total = 0
-                    for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat:
+                    for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat.items():
                         my_level_2_recipients_how_much_they_can_eat_in_total += how_much_one_can_eat
                     if my_level_2_recipients_how_much_they_can_eat_in_total <= how_much_I_can_send:
                         # I can send more than they can eat, so the number I will send is exactly how much each of them can eat
@@ -554,7 +593,7 @@ class UserSolution(Solution):
                         # Beause you want to spread out to more level 2 nodes
                         my_level_2_recipients_how_much_I_allocate = {}
                         my_level_2_recipients_how_much_I_allocate_in_total = 0
-                        for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat:
+                        for level_2_node, how_much_one_can_eat in my_level_2_recipients_how_much_they_can_eat.items():
                             how_much_I_allocate = int( (my_level_2_recipients_how_much_they_can_eat[level_2_node] / my_level_2_recipients_how_much_they_can_eat_in_total) * how_much_I_can_send )
                             my_level_2_recipients_how_much_I_allocate[level_2_node] = how_much_I_allocate
                             my_level_2_recipients_how_much_I_allocate_in_total += how_much_I_allocate
@@ -562,7 +601,7 @@ class UserSolution(Solution):
                         # Due to existence of some remainders due to rounding down / rounding up
                         while my_level_2_recipients_how_much_I_allocate_in_total < how_much_I_can_send: # Some remainders due to rounding down / rounding up
                             # Just randomly allocate to the level_2_nodes
-                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate:
+                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate.items():
                                 if my_level_2_recipients_how_much_I_allocate_in_total < how_much_I_can_send: # Some remainder due to rounding down / rounding up
                                     my_level_2_recipients_how_much_I_allocate[level_2_node] += 1
                                     my_level_2_recipients_how_much_I_allocate_in_total += 1
@@ -570,7 +609,7 @@ class UserSolution(Solution):
                                     break
                         while my_level_2_recipients_how_much_I_allocate_in_total > how_much_I_can_send: # Some remainders due to rounding down / rounding up
                             # Just randomly allocate to the level_2_nodes
-                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate:
+                            for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate.items():
                                 if my_level_2_recipients_how_much_I_allocate_in_total > how_much_I_can_send: # Some remainders due to rounding down / rounding up
                                     my_level_2_recipients_how_much_I_allocate[level_2_node] -= 1
                                     my_level_2_recipients_how_much_I_allocate_in_total -= 1
@@ -580,7 +619,7 @@ class UserSolution(Solution):
                     # Also how much I allocate in total is guaranteed to be <= how_much_I_can_send
                     # So now I will send messages (means now I will put messages into message_to_send list)
                     index = 0
-                    for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate:
+                    for level_2_node, how_much_I_allocate in my_level_2_recipients_how_much_I_allocate.items():
                         while how_much_I_allocate > 0:
                             message = Message(self.node_id, level_2_node, user_request_object.target_node_id, 
                                                 user_request_object.request_id, user_request_object.message_id[index], user_request_object.request_begin_time)
@@ -618,10 +657,15 @@ class UserSolution(Solution):
                 minor_id_range_list.append([message_id_list[slow],message_id_list[fast-1]+1])
                 slow = fast
             return minor_id_range_list
-                
+        def convert_to_signed_int(bin_str):
+            # Convert the binary string to an integer
+            num = int("0" + bin_str[:-1], 2)
+            return num
+
         if self.level == 1 or self.level == 2 or self.level == 3:        
             #count for success and fail messages
-            success, fail = 0,0
+            success = 0
+            fail = 0
             for message_result in result:
                 if message_result[1]==True:
                     success+=1
@@ -659,35 +703,35 @@ class UserSolution(Solution):
             """2.1.1 to 2.1.3 the first integer"""
             bin_first_int = bin_tran(switchStatsInfo[integer_index])
             self.remaining_outbound_of_myself -= fail
-            bin_first_int[0:8] = bin_tran(self.node_id)[24:]
-            bin_first_int[8:16] = bin_tran(self.remaining_outbound_of_myself)[24:]
+            bin_first_int = bin_tran(self.node_id)[24:] + bin_first_int[8:] #[0:8]
+            bin_first_int = bin_first_int[0:8] + bin_tran(self.remaining_outbound_of_myself)[24:] + bin_first_int[16:] #[8:16]
             if self.level == 1: #take care of the access level
-                bin_first_int[16:] = bin_tran(self.new_messages_success_added_count)[21:] + "00000"
+                bin_first_int = bin_first_int[0:16] + bin_tran(self.new_messages_success_added_count)[21:] + "00000" #[16:]
             else: #level =2 , 3
-                bin_first_int[16:] = "0" * 16
-            switchStatsInfo[integer_index] = int(bin_first_int , 2)
+                bin_first_int = bin_first_int[0:16] + "0" * 16  #[16:]
+            switchStatsInfo[integer_index] = convert_to_signed_int(bin_first_int)
             integer_index += 1
             """2.2.1 to 2.2.5"""     
             #two for loop, the outer loop is different to_node_id
             #              the inner loop is different request_id   
-            for to_node_id, request_id_dict in success_dict:
-                for request_id, userRequest in request_id_dict:
+            for to_node_id, request_id_dict in success_dict.items():
+                for request_id, userRequest in request_id_dict.items():
                     # 2.2.1 to 2.2.3
                     integer_value = switchStatsInfo[integer_index]
                     integer_value_bin = bin_tran(integer_value)
-                    integer_value_bin[0:8] = bin_tran(to_node_id)[24:]
-                    integer_value_bin[8:16] = bin_tran(userRequest.target_node_id)[24:]
-                    integer_value_bin[16:29] = bin_tran(request_id)[19:]
-                    integer_value_bin[29:] = "0" * 3
-                    switchStatsInfo[integer_index] = int(integer_value_bin , 2)
+                    integer_value_bin = bin_tran(to_node_id)[24:] + bin_first_int[8:] #[0:8]
+                    integer_value_bin = bin_first_int[0:8] + bin_tran(userRequest.target_node_id)[24:] + bin_first_int[16:]  #[8:16]
+                    integer_value_bin = integer_value_bin[0:16] + bin_tran(request_id)[19:] + integer_value_bin[29:] #[16:29]
+                    integer_value_bin = integer_value_bin[0:29] + "000"   #[29:]
+                    switchStatsInfo[integer_index] = convert_to_signed_int(integer_value_bin)
                     integer_index += 1
                     # 2.2.4 - 2.2.5
                     # the first 2.2.4 + 2.2.5 * 1
                     # the first 2.2.4
                     integer_value = switchStatsInfo[integer_index]
                     integer_value_bin = bin_tran(integer_value)
-                    integer_value_bin[0:8] = bin_tran(userRequest.request_begin_time)[24:]
-                    integer_value_bin[8:15] = "0000000"
+                    integer_value_bin = bin_tran(userRequest.request_begin_time)[24:] + integer_value_bin[8:] #[0:8]
+                    integer_value_bin = integer_value_bin[0:8] + "0000000" + integer_value_bin[15:] #[8:15]
                     # the first 2.2.5 * 1
                     minor_id_range_list = get_minor_id_range_list(userRequest) # It is a list of list, every list inside will be minor id to minor id for one request
                     first_range = minor_id_range_list[0]
@@ -695,13 +739,13 @@ class UserSolution(Solution):
                     first_range_end = first_range[1]
                     first_range_start_bit = bin_tran(first_range_start)
                     first_range_end_bit = bin_tran(first_range_end)
-                    integer_value_bin[15:29] = first_range_start_bit[25:] + first_range_end_bit[25:]
+                    integer_value_bin = integer_value_bin[0:15] + first_range_start_bit[25:] + first_range_end_bit[25:] + integer_value_bin[29:] #[15:29]
                     if len(minor_id_range_list) > 1:
-                        integer_value_bin[29:] = "100"
+                        integer_value_bin = integer_value_bin[0:29] + "100"  #[29:]
                     else:
-                        integer_value_bin[29:] = "000"
+                        integer_value_bin = integer_value_bin[0:29] + "000" #[29:]
                     minor_id_range_list.pop(0)
-                    switchStatsInfo[integer_index] = int(integer_value_bin , 2)
+                    switchStatsInfo[integer_index] = convert_to_signed_int(integer_value_bin)
                     integer_index += 1
                     #the rest of 2.2.5 * 2 * n
                     count_range = 0
@@ -709,7 +753,7 @@ class UserSolution(Solution):
                     integer_value_bin = bin_tran(integer_value)
                     for Range in minor_id_range_list: #Range is a list that have 2 element as i mentioned above
                         if count_range == 2:
-                            switchStatsInfo[integer_index] = int(integer_value_bin + "00" , 2)
+                            switchStatsInfo[integer_index] = convert_to_signed_int(integer_value_bin[0:30] + "00")
                             integer_index += 1
                             integer_value = switchStatsInfo[integer_index]
                             integer_value_bin = bin_tran(integer_value)
@@ -720,63 +764,75 @@ class UserSolution(Solution):
                         #combine range is a 14 binary bit
                         combine_range = start_range_bit[25:] + end_range_bit[25:]
                         if minor_id_range_list[-1] == Range: # if there is no more Range
-                            integer_value_bin[0 + count_range*15 : 15 + count_range*15] = combine_range + "0"
                             if count_range == 0:
-                                integer_value_bin[15:] = "0" * 17
-                                switchStatsInfo[integer_index] = int(integer_value_bin , 2)
+                                integer_value_bin = combine_range + "0" + integer_value_bin[15:] #[0:15]
+                                integer_value_bin = integer_value_bin[0:15] + "0" * 17 # [15:]
+                                switchStatsInfo[integer_index] = convert_to_signed_int(integer_value_bin)
                                 integer_index += 1
-                            else:
-                                switchStatsInfo[integer_index] = int(integer_value_bin + "00" , 2)
+                            elif count_range == 1:
+                                integer_value_bin = integer_value_bin[0:15] + combine_range + "0" + "00"   #[15:]
+                                switchStatsInfo[integer_index] = convert_to_signed_int(integer_value_bin)
                                 integer_index += 1
+                            # if count_range == 0:
+                                # integer_value_bin[15:] = "0" * 17
+                                # switchStatsInfo[integer_index] = int(integer_value_bin , 2)
+                                # integer_index += 1
+                            # else:
+                                # switchStatsInfo[integer_index] = int(integer_value_bin + "00" , 2)
+                                # integer_index += 1
                         else:
-                            integer_value_bin[0 + count_range*15 : 15 + count_range*15] = combine_range + "1"
+                            if count_range ==0 :
+                                integer_value_bin = combine_range + "1" + integer_value_bin[15:] #[0:15]
+                            elif count_range == 1:
+                                integer_value_bin = integer_value_bin[0:15] + combine_range + "1" + integer_value_bin[30:] #[15:30]
                         count_range += 1
                     
-            for to_node_id, number_of_failure in fail_dict: # add into your swtichStatsInfo to mention your failure
+            for to_node_id, number_of_failure in fail_dict.items(): # add into your swtichStatsInfo to mention your failure
                 integer_value = switchStatsInfo[integer_index]
                 integer_value_bin = bin_tran(integer_value)
-                integer_value_bin[0:8] = bin_tran(to_node_id)[24:]
-                integer_value_bin[8:16] = bin_tran(255)[24:]
-                integer_value_bin[16:24] = bin_tran(number_of_failure)[24:]
-                integer_value_bin[24:] = "0" * 8
-                switchStatsInfo[integer_index] = int(integer_value_bin , 2)
+                integer_value_bin = bin_tran(to_node_id)[24:] + integer_value_bin[8:] #[0:8]
+                integer_value_bin = integer_value_bin[0:8] + bin_tran(255)[24:] + integer_value_bin[16:] #[8:16]
+                integer_value_bin = integer_value_bin[0:16] + bin_tran(number_of_failure)[24:] + integer_value_bin[24:] #[16:24]
+                integer_value_bin = integer_value_bin[0:24] + "0" * 8 #[24:]
+                switchStatsInfo[integer_index] = convert_to_signed_int(integer_value_bin)
                 integer_index += 1
-                
+            
+            
             for rest_integer_index in range(integer_index,256): # The rest of the integers to_node_id should make it to 255
                 integer_index = rest_integer_index
                 integer_value = switchStatsInfo[integer_index]
                 integer_value_bin = bin_tran(integer_value)
-                integer_value_bin[:] = bin_tran(255)[24:] * 4
-                switchStatsInfo[integer_index] = int(integer_value_bin , 2)
-
+                integer_value_bin = bin_tran(255)[24:] * 4 #[:]
+                switchStatsInfo[integer_index] = convert_to_signed_int(integer_value_bin)
+                
         elif self.level == 4:
             """Define and update controller SwtichStatsInfo"""
             switchStatsInfo = [0 for i in range(256)]
             integer_index = 0
             integer_value = switchStatsInfo[integer_index]
             integer_value_bin = bin_tran(integer_value)
-            integer_value_bin[0:8] = bin_tran(255)[24:]
-            integer_value_bin[24:] = "0" * 24
-            switchStatsInfo[integer_index] = int(integer_value_bin , 2)
+            integer_value_bin = bin_tran(255)[24:] + integer_value_bin[8:] #[0:8]
+            integer_value_bin = integer_value_bin[0:8] + "0" * 24 #[8:]
+            switchStatsInfo[integer_index] = convert_to_signed_int(integer_value_bin)
             integer_index += 1
             for node in self.node_info_update_newspaper:
                 integer_value = switchStatsInfo[integer_index]
                 integer_value_bin = bin_tran(integer_value)
-                integer_value_bin[0:11] = bin_tran(node.remaining_buffer)[21:]
-                integer_value_bin[11:21] = bin_tran(node.remaining_inbound)[22:]
-                integer_value_bin[21:29] = bin_tran(node.remaining_outbound)[24:]
-                integer_value_bin[29:] = "0" * 3
-                switchStatsInfo[integer_index] = int(integer_value_bin , 2)
+                integer_value_bin = bin_tran(node.remaining_buffer)[21:] + integer_value_bin[11:] # [0:11]
+                integer_value_bin = bin_first_int[0:11] + bin_tran(node.remaining_inbound)[22:] + integer_value_bin[21:] #[11:21]
+                integer_value_bin = integer_value_bin[0:21] + bin_tran(node.remaining_outbound)[24:] + integer_value_bin[29:] #[21:29]
+                integer_value_bin = integer_value_bin[0:29] + "0" * 3 #[29:]
+                switchStatsInfo[integer_index] = convert_to_signed_int(integer_value_bin)
                 integer_index += 1
-                
+                 
         else: #level ==0
             switchStatsInfo = [0 for i in range(256)]
             integer_index = 0
             integer_value = switchStatsInfo[integer_index]
             integer_value_bin = bin_tran(integer_value)
-            integer_value_bin[0:8] = bin_tran(254)[24:]
-            integer_value_bin[8:] = "0" * 24
-            switchStatsInfo[integer_index] = int(integer_value_bin , 2)
+            integer_value_bin = bin_tran(254)[24:] + integer_value_bin[8:] #[0:8]
+            integer_value_bin = integer_value_bin[0:8] + "0" * 24 #[8:]
+            switchStatsInfo[integer_index] = convert_to_signed_int(integer_value_bin)
             integer_index += 1
             
         switchStatsInfo_2 = SwitchStatsInfo()
